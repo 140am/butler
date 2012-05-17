@@ -26,6 +26,19 @@ PPP_BUSY = "\x03"  # Signals worker busy state
 log = logging.getLogger(__name__)
 
 
+class Service(object):
+    """a single Service"""
+
+    name = None  # Service name
+    requests = None  # List of client requests
+    waiting = None  # List of waiting workers
+
+    def __init__(self, name):
+        self.name = name
+        self.requests = []
+        self.waiting = []
+
+
 class Worker(object):
     """an idle or active Worker instance"""
 
