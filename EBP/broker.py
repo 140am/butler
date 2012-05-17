@@ -136,9 +136,9 @@ class EBBroker(object):
                 log.debug('client FE activity')
                 self.process_client()
 
-            self.workers.purge()
-
             self.send_heartbeats()
+
+            self.workers.purge()
 
     def send_heartbeats(self):
 
@@ -153,6 +153,7 @@ class EBBroker(object):
 
     def process_worker(self):
 
+        # read request from BE
         frames = self.backend.recv_multipart()
         assert frames
 
@@ -186,8 +187,8 @@ class EBBroker(object):
             else:
                 log.critical("Invalid message from worker: %s" % address)
 
-        # client request echo
-        else:
+        else:  # client request echo
+
             # decode json request response
             response = cjson.decode(msg[5])
 
