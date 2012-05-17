@@ -83,7 +83,14 @@ class EBWorker(object):
                     log.critical('empty msg')
                     break  # Interrupted
 
-                if len(frames) == 6:
+                if len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
+
+                    log.debug("Queue heartbeat RECEIVED")
+
+                    # reset heartbeat timeout
+                    self.liveness = HEARTBEAT_LIVENESS
+
+                elif len(frames) == 6:
 
                     ident, x, service, function, expiration, request = frames
 
@@ -97,11 +104,8 @@ class EBWorker(object):
                     # send call back to response sink
                     self.sink.send('COMPLETED Job: %s' % request)
 
+                    # reset heartbeat timeout
                     self.liveness = HEARTBEAT_LIVENESS
-
-                elif len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
-
-                    log.debug("Queue heartbeat RECEIVED")
 
                 else:
                     log.critical("Invalid message: %s" % frames)
@@ -111,7 +115,7 @@ class EBWorker(object):
             else:  # no response received from router socket
 
                 self.liveness -= 1
-                if self.liveness == 0:
+                if self.liveness == 1:
 
                     log.warn("Heartbeat DEAD (%i seconds) - Reconnecting to Router in %0.2fs" % (
                         HEARTBEAT_LIVENESS, self.interval
@@ -129,10 +133,10 @@ class EBWorker(object):
                     self.worker.close()
 
                     # create new socket to broker
-                    self.worker = self.setup_worker_socket()
+                    self.setup_worker_socket()
 
-            # reset heartbeat timeout
-            self.liveness = HEARTBEAT_LIVENESS
+                    # reset heartbeat timeout
+                    self.liveness = HEARTBEAT_LIVENESS
 
             # send max 1 heartbeat per second
             if time.time() > self.heartbeat_at:

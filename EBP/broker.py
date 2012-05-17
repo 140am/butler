@@ -16,7 +16,7 @@ import cjson
 import collections
 
 HEARTBEAT_LIVENESS = 3     # 3..5 is reasonable
-HEARTBEAT_INTERVAL = 1.0   # Seconds
+HEARTBEAT_INTERVAL = 1   # Seconds
 REQUEST_LIFESPAN = 1  # seconds
 
 PPP_READY = "\x01"  # Signals worker is ready
@@ -27,6 +27,12 @@ log = logging.getLogger(__name__)
 
 
 class Worker(object):
+    """an idle or active Worker instance"""
+
+    address = None  # routing address
+    expiry = None  # expires at this point - unless heartbeat
+    service = None  # owning service name if known
+
     def __init__(self, address):
         self.address = address
         self.expiry = time.time() + HEARTBEAT_INTERVAL * HEARTBEAT_LIVENESS
@@ -101,11 +107,11 @@ class EBBroker(object):
                 msg = [worker, PPP_HEARTBEAT]
                 self.backend.send_multipart(msg)
 
-            heartbeat_at = time.time() + HEARTBEAT_INTERVAL
+            self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
 
     def process_client(self):
 
-        # read request as multi part message
+        # read request as multi part message from FE router socket
         frames = self.frontend.recv_multipart()
         assert frames
 
@@ -115,7 +121,7 @@ class EBBroker(object):
         # discared if request expired
         request_age = int(time.time()) - int(expiration)
         if request_age >= REQUEST_LIFESPAN:
-            log.warning('request expired %i seconds ago' % request_age)
+            log.debug('request expired %i seconds ago' % request_age)
             return
 
         log.debug('new request: %s | %s (from: %s)' % (service, function, ident))
@@ -146,20 +152,16 @@ class EBBroker(object):
         if len(msg) in [1, 2]:
 
             if msg[0] == PPP_READY:
+
                 self.workers.ready(Worker(address))
                 log.info('PPP_READY received from "%s" worker: %s' % (
                     msg[1], address
                 ))
 
-                msg = [address, PPP_HEARTBEAT]
-                self.backend.send_multipart(msg)
-
             elif msg[0] == PPP_HEARTBEAT:
+
                 self.workers.ready(Worker(address))
                 log.info('PPP_HEARTBEAT received from worker: %s' % address)
-
-                msg = [address, PPP_HEARTBEAT]
-                self.backend.send_multipart(msg)
 
             else:
                 log.critical("Invalid message from worker: %s" % address)
