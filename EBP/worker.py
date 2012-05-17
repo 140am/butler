@@ -28,10 +28,11 @@ class EBWorker(object):
     worker = None  # socket to broker
     heartbeat_at = time.time() + HEARTBEAT_INTERVAL
 
-    def __init__(self, broker):
+    def __init__(self, broker, service = 'echo'):
 
         self.context = zmq.Context(1)
         self.poller = zmq.Poller()
+        self.service = service
 
         # PUSH socket to send broadcast/flow messages to
         self.sink = self.context.socket(zmq.PUSH)
@@ -60,8 +61,8 @@ class EBWorker(object):
         self.worker.connect("tcp://localhost:5556")
 
         # send `PPP_READY` message to Router
-        log.info('sent PPP_READY')
-        self.worker.send(PPP_READY)
+        log.info('sent PPP_READY - register: %s' % self.service)
+        self.worker.send_multipart([PPP_READY, self.service])
 
     def run(self):
 

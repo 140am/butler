@@ -131,11 +131,13 @@ class EBBroker(object):
                 msg = frames[1:]
 
                 # control message received
-                if len(msg) == 1:
+                if len(msg) in [1, 2]:
 
                     if msg[0] == PPP_READY:
                         self.workers.ready(Worker(address))
-                        log.info('PPP_READY received from worker: %s' % address)
+                        log.info('PPP_READY received from "%s" worker: %s' % (
+                            msg[1], address
+                        ))
 
                         msg = [address, PPP_HEARTBEAT]
                         self.backend.send_multipart(msg)
