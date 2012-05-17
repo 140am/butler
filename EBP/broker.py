@@ -95,11 +95,88 @@ class EBBroker(object):
     def send_heartbeats(self):
 
         # Send heartbeats to idle workers if it's time
-        if time.time() >= heartbeat_at:
+        if time.time() >= self.heartbeat_at:
+
             for worker in self.workers.queue:
                 msg = [worker, PPP_HEARTBEAT]
-                backend.send_multipart(msg)
+                self.backend.send_multipart(msg)
+
             heartbeat_at = time.time() + HEARTBEAT_INTERVAL
+
+    def process_client(self):
+
+        # read request as multi part message
+        frames = self.frontend.recv_multipart()
+        assert frames
+
+        # parse request
+        ident, x, service, function, expiration, request = frames
+
+        # discared if request expired
+        request_age = int(time.time()) - int(expiration)
+        if request_age >= REQUEST_LIFESPAN:
+            log.warning('request expired %i seconds ago' % request_age)
+            return
+
+        log.debug('new request: %s | %s (from: %s)' % (service, function, ident))
+
+        # get worker from queue
+        new_worker = self.workers.next()
+
+        # add the destination Worker Identity to the client request
+        frames.insert(0, new_worker)
+
+        log.info('forwarding Client request (%s) to Worker BE: %s' % (frames, new_worker))
+
+        # send message to backend
+        self.backend.send_multipart(frames)
+
+    def process_worker(self):
+
+        frames = self.backend.recv_multipart()
+        assert frames
+
+        # Get Worker Identity
+        address = frames[0]
+
+        # Validate control message, or echo request to client
+        msg = frames[1:]
+
+        # control message received
+        if len(msg) in [1, 2]:
+
+            if msg[0] == PPP_READY:
+                self.workers.ready(Worker(address))
+                log.info('PPP_READY received from "%s" worker: %s' % (
+                    msg[1], address
+                ))
+
+                msg = [address, PPP_HEARTBEAT]
+                self.backend.send_multipart(msg)
+
+            elif msg[0] == PPP_HEARTBEAT:
+                self.workers.ready(Worker(address))
+                log.info('PPP_HEARTBEAT received from worker: %s' % address)
+
+                msg = [address, PPP_HEARTBEAT]
+                self.backend.send_multipart(msg)
+
+            else:
+                log.critical("Invalid message from worker: %s" % address)
+
+        # client request / echo request to frontend
+        else:
+            # decode json request response
+            response = cjson.decode(msg[5])
+
+            # modify request body to have updated attributes
+            response['worker'] = address
+
+            # encode data structure to string
+            msg[5] = cjson.encode(response)
+
+            log.info('forwarding Worker (%s) response to Front End: %s' % (address, msg))
+            self.frontend.send_multipart(msg)
 
     def run(self):
 
@@ -118,86 +195,15 @@ class EBBroker(object):
             if socks.get(self.backend) == zmq.POLLIN:
 
                 log.debug('worker BE activity')
-
-                frames = self.backend.recv_multipart()
-                if not frames:
-                    log.critical('worker BE - empty request received - SHUTTING DOWN')
-                    continue
-
-                # Get Worker Identity
-                address = frames[0]
-
-                # Validate control message, or echo request to client
-                msg = frames[1:]
-
-                # control message received
-                if len(msg) in [1, 2]:
-
-                    if msg[0] == PPP_READY:
-                        self.workers.ready(Worker(address))
-                        log.info('PPP_READY received from "%s" worker: %s' % (
-                            msg[1], address
-                        ))
-
-                        msg = [address, PPP_HEARTBEAT]
-                        self.backend.send_multipart(msg)
-
-                    elif msg[0] == PPP_HEARTBEAT:
-                        self.workers.ready(Worker(address))
-                        log.info('PPP_HEARTBEAT received from worker: %s' % address)
-
-                        msg = [address, PPP_HEARTBEAT]
-                        self.backend.send_multipart(msg)
-
-                    else:
-                        log.critical("Invalid message from worker: %s" % address)
-
-                # client request / echo request to frontend
-                else:
-                    # decode json request response
-                    response = cjson.decode(msg[5])
-
-                    # modify request body to have updated attributes
-                    response['worker'] = address
-
-                    # encode data structure to string
-                    msg[5] = cjson.encode(response)
-
-                    log.info('forwarding Worker (%s) response to Front End: %s' % (address, msg))
-                    self.frontend.send_multipart(msg)
+                self.process_worker()
 
             # Client request received - forward it to the backend router
             if socks.get(self.frontend) == zmq.POLLIN:
 
                 log.debug('client FE activity')
-
-                # read request as multi part message
-                frames = self.frontend.recv_multipart()
-                if not frames:
-                    log.critical('Invalid Client request')
-                    break
-
-                # parse request
-                ident, x, service, function, expiration, request = frames
-
-                # discared if request expired
-                request_age = int(time.time()) - int(expiration)
-                if request_age >= REQUEST_LIFESPAN:
-                    log.warning('request expired %i seconds ago' % request_age)
-                    continue
-
-                log.debug('new request: %s | %s (from: %s)' % (service, function, ident))
-
-                # get worker from queue
-                new_worker = self.workers.next()
-
-                # add the destination Worker Identity to the client request
-                frames.insert(0, new_worker)
-
-                log.info('forwarding Client request (%s) to Worker BE: %s' % (frames, new_worker))
-
-                # send message to backend
-                self.backend.send_multipart(frames)
+                self.process_client()
 
             self.workers.purge()
+
+            self.send_heartbeats()
 
