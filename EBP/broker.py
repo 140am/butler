@@ -167,15 +167,21 @@ class EBBroker(object):
 
             if msg[0] == PPP_READY:
 
-                self.workers.ready(Worker(address))
                 log.info('PPP_READY received from "%s" worker: %s' % (
                     msg[1], address
                 ))
 
+                self.workers.ready(Worker(address))
+
+                # register service name
+                if not msg[1] in self.services:
+                    self.services[msg[1]] = 0
+                self.services[msg[1]] += 1
+
             elif msg[0] == PPP_HEARTBEAT:
 
-                self.workers.ready(Worker(address))
                 log.info('PPP_HEARTBEAT received from worker: %s' % address)
+                self.workers.ready(Worker(address))
 
             else:
                 log.critical("Invalid message from worker: %s" % address)

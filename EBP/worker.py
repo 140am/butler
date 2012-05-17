@@ -79,10 +79,6 @@ class EBWorker(object):
 
                 frames = self.worker.recv_multipart()
 
-                if not frames:
-                    log.critical('empty msg')
-                    break  # Interrupted
-
                 if len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
 
                     log.debug("Queue heartbeat RECEIVED")
@@ -109,6 +105,7 @@ class EBWorker(object):
 
                 else:
                     log.critical("Invalid message: %s" % frames)
+                    break
 
                 self.interval = INTERVAL_INIT
 
