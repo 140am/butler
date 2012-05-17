@@ -17,7 +17,7 @@ log = logging.getLogger('client')
 log.setLevel(logging.INFO)
 
 # the maximum total `send` blocking time is REQUEST_RETRIES*REQUEST_TIMEOUT in msec
-REQUEST_RETRIES = 3
+REQUEST_RETRIES = 1
 REQUEST_TIMEOUT = 1500
 
 
@@ -74,8 +74,7 @@ class EBClient(object):
         while self.retries:
 
             # request timeout
-            #timeout = int(time.time()) + int(REQUEST_TIMEOUT / 1000)
-            timeout = int(time.time()) + 1
+            timeout = int(time.time()) + int(REQUEST_TIMEOUT / 1000)
 
             # convert request body dict to json structure
             if isinstance(request, dict):
@@ -145,7 +144,7 @@ class EBClient(object):
         # messure request time and ensure request takes at least REQUEST_TIMEOUT
         if not reply:
             runtime = time.time() - time_s
-            runtime = runtime * 100000  # conver to msec
+            runtime = runtime * 100000  # convert to msec
             if runtime < REQUEST_TIMEOUT:
                 time.sleep((REQUEST_TIMEOUT - runtime) / 1000)
 
