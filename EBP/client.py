@@ -125,9 +125,9 @@ class EBClient(object):
                     break
                 else:
                     log.error("Malformed reply from server: %s / %s" % (self.sequence, reply.split(':')[1]))
-                    reply = None
-                    break
 
+                    self.retries -= 1
+                    reply = None
             else:
 
                 self.retries -= 1
@@ -139,7 +139,10 @@ class EBClient(object):
                     log.debug('no response from router - re-attempting request')
                 else:
                     log.debug('no response from router - aborting')
-                    self.retries = REQUEST_RETRIES
+
+        # reset attempt counter
+        if not self.retries:
+            self.retries = REQUEST_RETRIES
 
         # messure request time and ensure request takes at least REQUEST_TIMEOUT
         if not reply:
