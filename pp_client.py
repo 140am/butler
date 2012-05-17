@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
     client = EBP.EBClient('tcp://127.0.0.1:5555')
 
-    for i in range(100):
+    for i in range(1000):
 
         request = {
             'source_uri' : 'http://www.path.to/mp4/test_%i.mp4' % random.randint(10000, 90000),
@@ -34,10 +34,5 @@ if __name__ == '__main__':
 
         resp = client.send( 'video.cut', request )
 
-        if resp:
-            log.info('Response - Request #%i - Response: %s | %s' % (
-                (i + 1),
-                request['source_uri'],
-                cjson.decode(resp)['source_uri'])
-            )
+        log.info('Response - Request #%i: %s' % ( (i + 1), resp ))
 

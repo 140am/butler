@@ -6,7 +6,6 @@ logging.basicConfig(
     level = logging.INFO
 )
 log = logging.getLogger('broker')
-log.setLevel(logging.INFO)
 
 if __name__ == '__main__':
 

@@ -107,27 +107,36 @@ class EBClient(object):
 
             if socks.get(self.client) == zmq.POLLIN:
 
-                reply = self.client.recv()
-                response = self.client.recv()
-                timeout = self.client.recv()
-                config = self.client.recv()
+                frames = self.client.recv_multipart()
 
-                # Don't try to handle errors, just assert noisily
-                # assert len(msg) >= 3
-                if not reply:
+                if not frames:
                     log.warn('got empty reply back from `Broker`')
                     break
 
-                # compares request sequence id to be in order
-                if int(reply.split(':')[1]) == self.sequence:
-                    reply = config
-                    self.retries = REQUEST_RETRIES
-                    break
-                else:
-                    log.error("Malformed reply from server: %s / %s" % (self.sequence, reply.split(':')[1]))
+                if frames[0].startswith('EB'):
 
-                    self.retries -= 1
-                    reply = None
+                    # parse response
+                    service_name, function, expiration, request_body = frames
+
+                    reply = request_body
+
+                    # Don't try to handle errors, just assert noisily
+                    # assert len(msg) >= 3
+                    # compares request sequence id to be in order
+                    if int(service_name.split(':')[1]) == self.sequence:
+                        self.retries = REQUEST_RETRIES
+                        break
+                    else:
+                        log.error("Malformed reply from server: %s / %s" % (self.sequence, service_name.split(':')[1]))
+
+                        self.retries -= 1
+                        reply = None
+
+                else:
+                    log.info('got service response: %s' % frames[0])
+                    reply = frames
+                    break
+
             else:
 
                 self.retries -= 1
@@ -145,7 +154,7 @@ class EBClient(object):
             self.retries = REQUEST_RETRIES
 
         # messure request time and ensure request takes at least REQUEST_TIMEOUT
-        if not reply:
+        if reply and len(reply) >= 2:
             runtime = time.time() - time_s
             runtime = runtime * 100000  # convert to msec
             if runtime < REQUEST_TIMEOUT:
