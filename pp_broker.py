@@ -113,7 +113,7 @@ while True:
         frames = backend.recv_multipart()
         if not frames:
             log.critical('worker BE - empty request received - SHUTTING DOWN')
-            break
+            continue
 
         # Get Worker Identity
         address = frames[0]
@@ -155,31 +155,37 @@ while True:
             log.info('forwarding Worker (%s) response to Front End: %s' % (address, msg))
             frontend.send_multipart(msg)
 
-    # Client request received - sending it to ROUTER BE
+    # Client request received - forward it to the backend router
     if socks.get(frontend) == zmq.POLLIN:
 
         log.debug('client FE activity')
 
+        # read request as multi part message
         frames = frontend.recv_multipart()
         if not frames:
             log.critical('Invalid Client request')
             break
 
-        # check if request is already expired
+        # parse request
         ident, x, service, function, expiration, request = frames
 
+        log.debug('new request: %s | %s (from: %s)' % (service, function, ident))
+
+        # discared if request expired
         request_age = int(time.time()) - int(expiration)
         if request_age > REQUEST_LIFESPAN:
             log.warning('request expired %i seconds ago' % request_age)
             continue
 
-        # get worker via Least Recently Used Worker queue
+        # get worker from queue
         new_worker = workers.next()
 
-        # update the Client MSG with the destination Worker Idenity
+        # add the destination Worker Identity to the client request
         frames.insert(0, new_worker)
 
         log.info('forwarding Client request (%s) to Worker BE: %s' % (frames, new_worker))
+
+        # send message to backend
         backend.send_multipart(frames)
 
     workers.purge()

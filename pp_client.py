@@ -10,13 +10,11 @@ import random
 import cjson
 import zmq
 
-SERVER_ENDPOINT = 'tcp://127.0.0.1:5555'
+BROKER_ENDPOINT = 'tcp://127.0.0.1:5555'
 
 REQUEST_TIMEOUT = 2500
 REQUEST_RETRIES = 5
 REQUEST_LIFESPAN = 5  # seconds
-
-PPP_BUSY = "\x03"  # Signals worker busy state
 
 logging.basicConfig( format = '%(asctime)s - %(levelname)s - %(threadName)s - %(message)s' )
 log = logging.getLogger('client')
@@ -32,7 +30,7 @@ retries_left = REQUEST_RETRIES
 
 def setup_router_socket(context, poller):
 
-    identity = "%04X-%04X" % (random.randint(0, 0x10000), random.randint(0, 0x10000))
+    identity = "client-%04X-%04X" % (random.randint(0, 0x10000), random.randint(0, 0x10000))
 
     # create a ZMQ_REQ socket to send requests / receive replies
     client = context.socket(zmq.REQ)
@@ -44,7 +42,7 @@ def setup_router_socket(context, poller):
     poll.register(client, zmq.POLLIN)
 
     # connect to `Router` socket
-    client.connect(SERVER_ENDPOINT)
+    client.connect(BROKER_ENDPOINT)
 
     return client
 
@@ -117,6 +115,7 @@ while retries_left:
             # wait up to REQUEST_RETRIES*buffer-timeout for acceptance of the request
             retries_left -= 1
             if retries_left == 0:
+                log.warn('re-connecting')
 
                 # Socket is confused. Close and remove it.
                 client.setsockopt(zmq.LINGER, 0)

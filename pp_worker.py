@@ -3,7 +3,7 @@ import time
 import random
 import zmq
 
-HEARTBEAT_LIVENESS = 3
+HEARTBEAT_LIVENESS = 3  # seconds until heartbeat is expected from router
 HEARTBEAT_INTERVAL = 1
 INTERVAL_INIT = 1
 INTERVAL_MAX = 32
@@ -79,19 +79,21 @@ while True:
 
             ident, x, service, function, expiration, request = frames
 
-            log.info("New Request")
+            log.info("New Request: %s" % frames)
 
             # send response to ACK accepted request/task
             worker.send_multipart(frames)
 
-            log.info('- fetching: %s' % request)
             time.sleep(60)  # Do some heavy work
 
+            # send call back to response sink
             sink.send('COMPLETED Job: %s' % request)
 
+            # reset heartbeat timeout
             liveness = HEARTBEAT_LIVENESS
 
         elif len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
+
             log.debug("Queue heartbeat RECEIVED")
             liveness = HEARTBEAT_LIVENESS
 
@@ -100,21 +102,24 @@ while True:
 
         interval = INTERVAL_INIT
 
-    else:
+    else:  # no response received from router socket
 
         liveness -= 1
         if liveness == 0:
-
-            log.warn("Heartbeat failure, can't reach queue")
-            log.warn("Reconnecting in %0.2fs" % interval)
+            log.warn("Heartbeat DEAD (%i seconds) - Reconnecting to Router in %0.2fs" % (
+                HEARTBEAT_LIVENESS, interval
+            ))
             time.sleep(interval)
 
             if interval < INTERVAL_MAX:
                 interval *= 2
+            else:
+                interval = INTERVAL_INIT
 
             poller.unregister(worker)
             worker.setsockopt(zmq.LINGER, 0)
             worker.close()
+
             worker = setup_worker_socket(context, poller)
 
             liveness = HEARTBEAT_LIVENESS
