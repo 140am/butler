@@ -36,7 +36,7 @@ class EBWorker(object):
 
         # PUSH socket to send broadcast/flow messages to
         self.sink = self.context.socket(zmq.PUSH)
-        self.sink.connect(broker)
+        #self.sink.connect('tcp://localhost:5558')
 
         # DEALER socket to get jobs from/to
         self.setup_worker_socket()
