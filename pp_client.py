@@ -9,16 +9,13 @@ import EBP
 
 logging.basicConfig(
     format = '%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
-    level = logging.DEBUG
+    level = logging.INFO
 )
 log = logging.getLogger('client')
-log.setLevel(logging.INFO)
 
 if __name__ == '__main__':
 
     client = EBP.EBClient('tcp://127.0.0.1:5555')
-    client.timeout = 1000  # 1 sec
-    client.retires = 1  # attempt only once
 
     for i in range(100):
 
@@ -33,10 +30,12 @@ if __name__ == '__main__':
             'notes' : ''
         }
 
+        log.info('Sending - Request #%i' % (i + 1))
+
         resp = client.send( 'video.cut', request )
 
         if resp:
-            log.info('Sent Request #%i - Response: %s | %s' % (
+            log.info('Response - Request #%i - Response: %s | %s' % (
                 (i + 1),
                 request['source_uri'],
                 cjson.decode(resp)['source_uri'])
