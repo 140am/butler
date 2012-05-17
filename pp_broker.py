@@ -14,7 +14,7 @@ import cjson
 
 HEARTBEAT_LIVENESS = 3     # 3..5 is reasonable
 HEARTBEAT_INTERVAL = 1.0   # Seconds
-REQUEST_LIFESPAN = 5  # seconds
+REQUEST_LIFESPAN = 1  # seconds
 
 PPP_READY = "\x01"  # Signals worker is ready
 PPP_HEARTBEAT = "\x02"  # Signals worker heartbeat
@@ -169,13 +169,13 @@ while True:
         # parse request
         ident, x, service, function, expiration, request = frames
 
-        log.debug('new request: %s | %s (from: %s)' % (service, function, ident))
-
         # discared if request expired
         request_age = int(time.time()) - int(expiration)
-        if request_age > REQUEST_LIFESPAN:
+        if request_age >= REQUEST_LIFESPAN:
             log.warning('request expired %i seconds ago' % request_age)
             continue
+
+        log.debug('new request: %s | %s (from: %s)' % (service, function, ident))
 
         # get worker from queue
         new_worker = workers.next()
