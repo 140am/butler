@@ -143,10 +143,11 @@ class EBClient(object):
                     break
 
         # messure request time and ensure request takes at least REQUEST_TIMEOUT
-        runtime = time.time() - time_s
-        runtime = runtime * 100000  # conver to msec
-        if runtime < REQUEST_TIMEOUT:
-            time.sleep((REQUEST_TIMEOUT - runtime) / 1000)
+        if not reply:
+            runtime = time.time() - time_s
+            runtime = runtime * 100000  # conver to msec
+            if runtime < REQUEST_TIMEOUT:
+                time.sleep((REQUEST_TIMEOUT - runtime) / 1000)
 
         return reply
 
