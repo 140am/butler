@@ -22,7 +22,7 @@ PPP_BUSY = "\x03"  # Signals worker busy state
 
 logging.basicConfig( format = '%(asctime)s - %(levelname)s - %(threadName)s - %(message)s' )
 log = logging.getLogger('broker')
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 
 class Worker(object):
