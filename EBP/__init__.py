@@ -1,4 +1,4 @@
-""" Encoding Booth Workflow Protocol
+""" EBwrkapi - Encoding Booth Workflow Protocol
 
 The EB module reliable service-oriented request-reply dialog between a set of client applications,
 a broker and a set of worker applications.
@@ -17,3 +17,4 @@ from broker import EBBroker
 from worker import EBWorker
 
 __version__ = 'EBv1'
+

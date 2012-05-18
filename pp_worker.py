@@ -15,8 +15,8 @@ log = logging.getLogger('pp_worker')
 if __name__ == '__main__':
 
     worker = EBP.EBWorker("tcp://localhost:5556", 'video.cut')
-
     reply = None
+
     while True:
 
         # poll broker through worker server
