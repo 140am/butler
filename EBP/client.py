@@ -15,6 +15,8 @@ import random
 import cjson
 import zmq
 
+import EBP
+
 REQUEST_RETRIES = 1
 REQUEST_TIMEOUT = 1500
 
@@ -45,7 +47,6 @@ class EBClient(object):
         # close existing socket
         if self.client:
             self.poller.unregister(self.client)
-            self.client.setsockopt(zmq.LINGER, 0)
             self.client.close()
 
         # create a ZMQ_REQ socket to send requests / receive replies
@@ -53,6 +54,7 @@ class EBClient(object):
 
         # set the `identity` to retrieve responses on disconnect
         self.client.setsockopt(zmq.IDENTITY, self.identity)
+        self.client.setsockopt(zmq.LINGER, 0)
         self.client.setsockopt(zmq.HWM, 0)
 
         # register socket with poller
@@ -84,14 +86,14 @@ class EBClient(object):
             """ Request Layout:
 
             Frame 0: Empty (zero bytes, invisible to REQ application)
-            Frame 1: "EB1:%i" (3+ bytes, representing version and request sequence number)
+            Frame 1: "EBv1:%i" (string, representing version and request sequence number)
             Frame 2: Service name (printable string)
             Frame 3: Expiration Time (unix time in future)
             Frames 4+: Request body (opaque binary, will be converted to json string)
             """
 
             msg = [
-                'EBv1:%i' % self.sequence,
+                '%s:%i' % (EBP.__version__, self.sequence),
                 str(service),
                 str(timeout),
                 str(request)
@@ -102,7 +104,7 @@ class EBClient(object):
             try:
                 socks = dict(self.poller.poll(self.timeout))
             except KeyboardInterrupt:
-                self.shutdown()
+                self.destroy()
                 break
 
             if socks.get(self.client) == zmq.POLLIN:
@@ -113,10 +115,10 @@ class EBClient(object):
                     log.warn('got empty reply back from `Broker`')
                     break
 
-                if frames[0].startswith('EB'):
+                if frames[2].startswith(EBP.__version__):
 
                     # parse response
-                    service_name, function, expiration, request_body = frames
+                    ident, x, service_name, function, expiration, request_body = frames
 
                     reply = request_body
 
@@ -133,7 +135,7 @@ class EBClient(object):
                         reply = None
 
                 else:
-                    log.info('got service response: %s' % frames[0])
+                    log.info('got service response: %s' % frames)
                     reply = frames
                     break
 
@@ -149,19 +151,19 @@ class EBClient(object):
                 else:
                     log.debug('no response from router - aborting')
 
-        # reset attempt counter
-        if not self.retries:
-            self.retries = REQUEST_RETRIES
-
         # messure request time and ensure request takes at least REQUEST_TIMEOUT
-        if reply and len(reply) >= 2:
+        if self.retries != REQUEST_RETRIES:
             runtime = time.time() - time_s
             runtime = runtime * 100000  # convert to msec
             if runtime < REQUEST_TIMEOUT:
                 time.sleep((REQUEST_TIMEOUT - runtime) / 1000)
 
+        # reset attempt counter
+        if not self.retries:
+            self.retries = REQUEST_RETRIES
+
         return reply
 
-    def shutdown(self):
+    def destroy(self):
         self.context.term()
 

@@ -189,15 +189,6 @@ class EBBroker(object):
 
         else:  # client request echo
 
-            # decode json request response
-            response = cjson.decode(msg[5])
-
-            # modify request body to have updated attributes
-            response['worker'] = address
-
-            # encode data structure to string
-            msg[5] = cjson.encode(response)
-
             log.info('forwarding Worker (%s) response to Front End: %s' % (address, msg))
             self.frontend.send_multipart(msg)
 
@@ -224,17 +215,20 @@ class EBBroker(object):
         else:
 
             log.debug('new request: %s | %s (from: %s)' % (service, function, ident))
+            self.dispatch_request(frames)
 
-            # get worker from queue
-            new_worker = self.workers.next()
+    def dispatch_request(self, frames):
 
-            # add the destination Worker Identity to the client request
-            frames.insert(0, new_worker)
+        # get worker from queue
+        new_worker = self.workers.next()
 
-            log.info('forwarding Client request (%s) to Worker BE: %s' % (frames, new_worker))
+        # add the destination Worker Identity to the client request
+        frames.insert(0, new_worker)
 
-            # send message to backend
-            self.backend.send_multipart(frames)
+        log.info('forwarding Client request (%s) to Worker BE: %s' % (frames, new_worker))
+
+        # send message to backend
+        self.backend.send_multipart(frames)
 
     def service_lookup(self, msg):
 
