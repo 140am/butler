@@ -106,15 +106,11 @@ class EBWorker(object):
 
                 # reset heartbeat timeout
                 self.liveness = HEARTBEAT_LIVENESS
-
                 self.interval = INTERVAL_INIT
 
                 if len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
 
                     log.debug("Queue heartbeat RECEIVED")
-
-                    # reset heartbeat timeout
-                    self.liveness = HEARTBEAT_LIVENESS
 
                 elif len(frames) == 6:
 
@@ -125,7 +121,7 @@ class EBWorker(object):
                     self.reply_to = ident
 
                     # send call back to response sink
-                    self.sink.send('COMPLETED Job: %s' % request)
+                    self.sink.send('ACCEPTED Job: %s' % request)
 
                     return frames
 
@@ -161,6 +157,6 @@ class EBWorker(object):
                 log.debug("Worker heartbeat SENT")
                 self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
 
-        log.warn("W: interrupt received, killing worker")
+        log.warn('Keyboard Interrupt received, killing worker')
         return None
 
