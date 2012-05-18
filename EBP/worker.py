@@ -1,3 +1,15 @@
+"""
+Example Usage:
+
+worker = EBP.EBWorker("tcp://localhost:5556", 'video.cut')
+
+reply = None
+while True:
+    request = worker.recv(reply)
+    if not request:
+        break  # worker was interrupted / stopped
+"""
+
 import logging
 import time
 import random

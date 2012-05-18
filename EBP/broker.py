@@ -93,16 +93,15 @@ class EBBroker(object):
         self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
 
         self.context = zmq.Context(1)
+
         self.socket = self.context.socket(zmq.ROUTER)
         self.socket.linger = 0
 
         self.frontend = self.context.socket(zmq.ROUTER)  # Front End
         self.frontend.setsockopt(zmq.HWM, 0)
-        #self.frontend.bind("tcp://*:5555")  # For clients
 
         self.backend = self.context.socket(zmq.ROUTER)  # Back End
         self.backend.setsockopt(zmq.HWM, 0)
-        #self.backend.bind("tcp://*:5556")  # For workers
 
         self.pull_backends = zmq.Poller()
         self.pull_backends.register(self.backend, zmq.POLLIN)

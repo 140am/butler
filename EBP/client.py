@@ -1,11 +1,8 @@
 """ Encoding Booth - Worker Broker Client
 
-A zeromq socket of type ZMQ_REQ is used by a client to send requests to and receive replies from a service.
+A 0MQ socket of type ZMQ_REQ is used by a client to send requests to and receive replies from a service.
 Each request sent is round-robined among all broker services and each reply received is matched with the
 last issued request.
-
-Inspired by:
-- http://rfc.zeromq.org/spec:7
 """
 
 import time
