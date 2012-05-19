@@ -15,7 +15,7 @@ Based on 0MQ <http://www.zeromq.org/>
 
 Provides a Client Frontend and Worker Backend.
 
-    broker = EBP.EBBroker()
+    broker = ebwrkapi.EBBroker()
     broker.frontend.bind "tcp://*:5555"
     broker.backend.bind "tcp://*:5556"
     broker.run()
@@ -25,7 +25,7 @@ Provides a Client Frontend and Worker Backend.
 
 Send a request and receive its response.
 
-    client = EBP.EBClient('tcp://127.0.0.1:5555')
+    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
     response = client.send( 'validate.content', { 'uri' : 'http://www.encodingbooth.com/test.bin' } )
     print response
 
@@ -34,7 +34,7 @@ The default `EBClient.timeout` will wait max `1000` msec (1 second) to be accept
 
 ### Worker
 
-    worker = EBP.EBWorker("tcp://localhost:5556", 'video.cut')
+    worker = ebwrkapi.EBWorker("tcp://localhost:5556", 'video.cut')
     reply = None
     while True:
         request = worker.recv(reply)
@@ -48,7 +48,7 @@ The default `EBClient.timeout` will wait max `1000` msec (1 second) to be accept
 
 To see if a `Worker` is available right now to handle the named function:
 
-    client = EBP.EBClient('tcp://127.0.0.1:5555')
+    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
     response = client.send( 'mmi.validate.content' )
     if response[1] == '200':
         print 'someone is around to handle %s' % response[0]

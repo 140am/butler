@@ -12,7 +12,7 @@ import random
 import cjson
 import zmq
 
-import EBP
+import ebwrkapi
 
 REQUEST_RETRIES = 1
 REQUEST_TIMEOUT = 1500
@@ -90,7 +90,7 @@ class EBClient(object):
             """
 
             msg = [
-                '%s:%i' % (EBP.__version__, self.sequence),
+                '%s:%i' % (ebwrkapi.__version__, self.sequence),
                 str(service),
                 str(timeout),
                 str(request)
@@ -112,7 +112,7 @@ class EBClient(object):
                     log.warn('got empty reply back from `Broker`')
                     break
 
-                if frames[2].startswith(EBP.__version__):
+                if frames[2].startswith(ebwrkapi.__version__):
 
                     # parse response
                     ident, x, service_name, function, expiration, request_body = frames

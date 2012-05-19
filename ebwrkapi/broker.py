@@ -3,7 +3,7 @@ the identity of the originating peer to the message before passing it to the `Wo
 
 Example Usage:
 
-broker = EBP.EBBroker()
+broker = ebwrkapi.EBBroker()
 broker.frontend.bind("tcp://*:5555")
 broker.backend.bind("tcp://*:5556")
 broker.run()

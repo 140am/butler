@@ -1,5 +1,5 @@
 import logging
-import EBP
+import ebwrkapi
 
 logging.basicConfig(
     format = '%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
@@ -9,7 +9,7 @@ log = logging.getLogger('broker')
 
 if __name__ == '__main__':
 
-    broker = EBP.EBBroker()
+    broker = ebwrkapi.EBBroker()
     broker.frontend.bind("tcp://*:5555")
     broker.backend.bind("tcp://*:5556")
     broker.run()

@@ -4,7 +4,7 @@ import random
 import cjson
 import zmq
 
-import EBP
+import ebwrkapi
 
 logging.basicConfig(
     format = '%(asctime)s - %(levelname)s - %(name)s - %(threadName)s - %(message)s',
@@ -14,7 +14,7 @@ log = logging.getLogger('pp_worker')
 
 if __name__ == '__main__':
 
-    worker = EBP.EBWorker("tcp://localhost:5556", 'video.cut')
+    worker = ebwrkapi.EBWorker("tcp://localhost:5556", 'video.cut')
     reply = None
 
     while True:

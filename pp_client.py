@@ -5,7 +5,7 @@ import random
 import cjson
 import zmq
 
-import EBP
+import ebwrkapi
 
 logging.basicConfig(
     format = '%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
@@ -15,7 +15,7 @@ log = logging.getLogger('client')
 
 if __name__ == '__main__':
 
-    client = EBP.EBClient('tcp://127.0.0.1:5555')
+    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
 
     for i in range(1000):
 

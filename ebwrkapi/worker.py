@@ -1,7 +1,7 @@
 """
 Example Usage:
 
-worker = EBP.EBWorker("tcp://localhost:5556", 'video.cut')
+worker = ebwrkapi.EBWorker("tcp://localhost:5556", 'video.cut')
 
 reply = None
 while True:
