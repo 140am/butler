@@ -6,12 +6,12 @@ a set of client applications, a broker and a set of worker applications. Feature
 - Request / Reply broker to for Client requests
 - Service Discovery by adding `mmi.` as prefix to function names
 
-Based on 0MQ <http://www.zeromq.org/>
+Based on <http://www.python.org/> and 0MQ <http://www.zeromq.org/>
 
 
-## Example Usage
+## Getting Started
 
-### Create a Request-Reply Broker
+### Run a Request-Reply Broker
 
 Provides a Client Frontend and Worker Backend.
 
@@ -21,7 +21,7 @@ Provides a Client Frontend and Worker Backend.
     broker.run()
 
 
-### Client Usage
+### Send Requests from Client
 
 Send a request and receive its response.
 
@@ -42,6 +42,8 @@ The default `EBClient.timeout` will wait max `1000` msec (1 second) to be accept
             break  # worker was interrupted
         reply = request   # echo the request back to the client after modifying it
         reply['status'] = 1
+        pass  # anything happneing here will cause the `Router` to stop
+        routing messsages here
 
 
 ### Service Discovery
@@ -53,8 +55,53 @@ To see if a `Worker` is available right now to handle the named function:
     if response[1] == '200':
         print 'someone is around to handle %s' % response[0]
 
+
+## Components
+
+### Client
+
+- Sends Request/Reply transaction to `Broker`
+- Client can control sync / asynchronous behavior via `EBClient.timeout` and `EBClient.retries`
+    - Client  wait for at least `EBClient.timeout` value (1000 msec / 1 sec) for response
+- Request Sequence numbering to enforce Request -> Reply pattern
+
+
+### Broker
+
+- pool the BE and FE sockets for messages
+	- _only_ poll the BE socket if no workers are currently registered
+- process Worker messsage
+  	- require_worker = create `Worker` object
+	- parse message
+		- PPP_READY
+			- attempt to lookup `service` name in `self.services` dict
+              to get a `Service object
+                - client requests
+                - waiting workers
+            - call `worker_waiting` to signal that Worker is ready to accept Work
+		- PPP_HEARTBEAT
+		- error
+- process a `Client` request
+	- internal `mmi.` service call
+	- Worker` service call forwarded to BE
+- Send Heartbeat Messages to BE
+- Purge expired but registered `Worker`
+
+### Worker
+
+- Connects to `Broker` socket via `0MQ` socket
+- Sends `PPP_READY` Message to `Broker` BE
+- Goes into polling state calling #recv on the `Broker` BE socket
+- `Worker` running in while loop until empty/invalid Response received OR keyboard interrupt signal
+- processes each received `request` messages
+    - Broker will not receive any Heartbeats until Worker is done
+    - Broker will not issue new Tasks to the Worker
+- send a `reply` to the Client by going through one loop cycle before timeout
+
+
 ## Inspiration
 
+- http://zguide.zeromq.org/page:all
 - http://rfc.zeromq.org/spec:9
 - http://rfc.zeromq.org/spec:8
 
