@@ -15,14 +15,15 @@ import zmq
 import cjson
 import collections
 import binascii
+import threading
 
-HEARTBEAT_LIVENESS = 3     # 3..5 is reasonable
-HEARTBEAT_INTERVAL = 1   # Seconds
+HEARTBEAT_INTERVAL = 1000  # msec between heartbeats sent out
+HEARTBEAT_LIVENESS = 3  # seconds until heartbeat is expected / worker is considered dead
 REQUEST_LIFESPAN = 1  # seconds
 
 PPP_READY = "\x01"  # Signals worker is ready
 PPP_HEARTBEAT = "\x02"  # Signals worker heartbeat
-PPP_BUSY = "\x03"  # Signals worker busy state
+PPP_RECONNECT = "\x03"  # Signals worker re-connect
 
 log = logging.getLogger(__name__)
 
@@ -51,47 +52,12 @@ class Worker(object):
     def __init__(self, identity, address):
         self.identity = identity
         self.address = address
-        self.expiry = time.time() + 1e-3 * HEARTBEAT_LIVENESS
-
-
-class WorkerQueue(object):
-    """ Fast Queue of `ready` Workers which can be retrived in a Leased Recently Used order.
-    """
-
-    def __init__(self):
-        self.queue = {}
-
-    def ready(self, worker, service):
-
-        if not service in self.queue:  # init
-            self.queue[service] = collections.OrderedDict()
-        # remove the address if it happend to be set already
-        self.queue[service].pop(worker.address, None)
-        # register `Worker` object
-        self.queue[service][worker.address] = worker
-
-    def purge(self):
-        """Look for & kill expired workers."""
-        t = time.time()
-
-        expired = []
-        for address, worker in self.queue.iteritems():
-            if t < worker.expiry:  # Worker is alive (seen recently)
-                break
-            expired.append(address)
-
-        # update the queue with the result
-        for address in expired:
-            log.warn("Idle worker expired: %s" % address)
-            self.queue.pop(address, None)
-
-    def next(self):  # return oldest entry in list
-        address, worker = self.queue.popitem(False)
-        log.info('using WorkerServer: %s | %s | %s' % (address, worker, len(self.queue)))
-        return address
+        self.expiry = time.time() + HEARTBEAT_LIVENESS
 
 
 class EBBroker(object):
+
+    heart = None
 
     def __init__(self):
 
@@ -118,7 +84,32 @@ class EBBroker(object):
         self.poll_both.register(self.frontend, zmq.POLLIN)
         self.poll_both.register(self.backend, zmq.POLLIN)
 
+    def setup_heartbeat(self):
+
+        log.info('setup_heartbeat')
+
+        while True:
+
+            log.debug('attempting to ping %i worker' % len(self.waiting))
+
+            self.purge_workers()
+
+            for worker in self.waiting:
+                log.debug('PING sent: %s' % worker)
+                msg = [worker.address, PPP_HEARTBEAT]
+                self.backend.send_multipart(msg)
+
+            self.heartbeat_at = time.time() + 1e-3 * HEARTBEAT_INTERVAL
+
+            time.sleep(1e-3 * HEARTBEAT_INTERVAL)
+
     def run(self):
+
+        # setup Broker Heartbeat
+
+        self.heart = threading.Thread(target=self.setup_heartbeat)
+        self.heart.daemon = True
+        self.heart.start()
 
         while True:
 
@@ -130,7 +121,7 @@ class EBBroker(object):
                 poller = self.poll_both
 
             try:  # poll socket for request message
-                socks = dict(poller.poll(HEARTBEAT_INTERVAL * 1000))
+                socks = dict(poller.poll(HEARTBEAT_INTERVAL))
             except KeyboardInterrupt:
                 break  # Keyboard Interrupted
 
@@ -146,12 +137,10 @@ class EBBroker(object):
                 log.debug('client FE activity')
                 self.process_client()
 
-            self.send_heartbeats()
-
-            self.purge_workers()
-
     def process_worker(self):
         """Process Worker Message"""
+
+        log.debug('process_worker call')
 
         # read request from BE
         frames = self.backend.recv_multipart()
@@ -162,7 +151,7 @@ class EBBroker(object):
         msg = frames[1:]
 
         # worker had been registered already / active session open
-        worker_ready = binascii.hexlify(address) in self.workers
+        worker_ready = address in self.workers
 
         # create `Worker` object
         worker = self.require_worker(address)
@@ -178,6 +167,7 @@ class EBBroker(object):
                 # not first command after startup
                 if worker_ready:
                     log.critical('Late PPP_READY received')
+                    self.delete_worker(worker, True)
                     return
 
                 service = msg.pop(0)
@@ -193,21 +183,23 @@ class EBBroker(object):
 
             elif command == PPP_HEARTBEAT:
 
-                log.info('PPP_HEARTBEAT received from worker: %s' % address)
-                if worker_ready:
-                    worker.expiry = time.time() + 1e-3 * HEARTBEAT_INTERVAL
+                log.debug('PPP_HEARTBEAT / PING received from worker: %s' % address)
 
-                self.worker_waiting(worker)
-
-                self.dispatch_request(worker.service, [PPP_HEARTBEAT])
+                if worker_ready:  # update expiration date
+                    log.debug('update expiry')
+                    worker.expiry = time.time() + HEARTBEAT_LIVENESS
+                else:
+                    self.delete_worker(worker, True)
 
             else:
                 log.critical("Invalid message from worker: %s" % address)
 
         else:  # custom response
 
-            log.info('forwarding Worker (%s) response to Front End: %s' % (address, msg))
+            log.debug('forwarding Worker (%s) response to Front End: %s' % (address, msg))
             self.frontend.send_multipart(msg)
+
+            self.worker_waiting(worker)
 
     def process_client(self):
 
@@ -231,16 +223,14 @@ class EBBroker(object):
 
         else:
 
-            log.debug('new request: %s | %s (from: %s)' % (service, function, ident))
-            self.dispatch_request( self.require_service(service), frames )
+            log.info('new request: %s | %s (from: %s)' % (service, function, ident))
+            self.dispatch_request( self.require_service(function), frames )
 
     def dispatch_request(self, service, msg):
 
         assert (service is not None)
 
-        log.info('dispatch_request: %s | %s' % (service, msg))
-
-        if msg is not None:  # queue message if any so nothing gets lost
+        if msg is not None:  # queue message in memory
             service.requests.append(msg)
 
         self.purge_workers()
@@ -252,7 +242,9 @@ class EBBroker(object):
             # add the destination Worker Identity to the client request
             msg.insert(0, new_worker.address)
 
-            log.info('forwarding Client request (%s) to Worker BE: %s' % (msg, new_worker))
+            log.debug('forwarding Client request (%s) to Worker BE: %s' % (msg, new_worker))
+
+            self.waiting.remove(new_worker)
 
             # send message to backend
             self.backend.send_multipart(msg)
@@ -269,26 +261,13 @@ class EBBroker(object):
         # send response to client Front End router
         self.frontend.send_multipart(msg)
 
-    def send_heartbeats(self):
-
-        log.info('send_heartbeats: %s worker' % len(self.waiting))
-
-        # Send heartbeats to idle workers if it's time
-        if time.time() >= self.heartbeat_at:
-
-            for worker in self.waiting:
-                log.info('PING: %s' % worker)
-                msg = [worker.address, PPP_HEARTBEAT]
-                self.backend.send_multipart(msg)
-
-            self.heartbeat_at = time.time() + 1e-3 * HEARTBEAT_INTERVAL
-
     def require_service(self, name):
         """ Locates the service (registers if necessary)
         """
         assert (name is not None)
         service = self.services.get(name)
-        if (service is None):
+
+        if not service:
             service = Service(name)
             self.services[name] = service
         return service
@@ -299,10 +278,12 @@ class EBBroker(object):
         assert (address is not None)
         identity = binascii.hexlify(address)
         worker = self.workers.get(address)
-        if not worker:
+
+        if not worker:  # create new `Worker`
             worker = Worker( identity, address )
             self.workers[address] = worker
-            log.info("I: registering new worker: %s | %s" % (
+
+            log.info("registering new worker: %s | %s" % (
                 address, worker
             ))
 
@@ -311,15 +292,27 @@ class EBBroker(object):
     def worker_waiting(self, worker):
         """This worker is now waiting for work.
         """
-        log.info('worker waiting call: %s' % worker)
+        log.debug('worker ready for work call: %s | %i' % (
+                worker, len(self.waiting)
+            ))
+
+        # remove if its still on queue to be `ready`
+        """
+        if self.waiting:
+            try:
+                worker_idx = self.waiting.index(worker)
+            except ValueError: pass
+            else:  # continiue
+                self.waiting.pop(worker_idx)
+        """
 
         # Queue to broker and service waiting lists
         self.waiting.append(worker)
         worker.service.waiting.append(worker)
 
-        worker.expiry = time.time() + 1e-3 * HEARTBEAT_LIVENESS
+        worker.expiry = time.time() + HEARTBEAT_LIVENESS
 
-        self.dispatch_request(worker.service, None)
+        #self.dispatch_request(worker.service, None)
 
     def purge_workers(self):
         """ Look for & kill expired workers.
@@ -327,10 +320,29 @@ class EBBroker(object):
         """
         while self.waiting:
             w = self.waiting[0]
-            log.info('purge check: %s' % w)
+            log.debug('purge check: %s' % w)
             if w.expiry < time.time():
-                logging.info("I: deleting expired worker: %s", w.identity)
+                logging.warning("deleting expired worker: %s", w.address)
                 self.waiting.pop(0)
+                self.delete_worker(w, False)
             else:
                 break
+
+    def delete_worker(self, worker, disconnect):
+        """Deletes worker from all data structures, and deletes worker."""
+        assert worker is not None
+
+        if disconnect:  # send re-connect msg to worker
+            msg = [worker.address, PPP_RECONNECT]
+            self.backend.send_multipart(msg)
+
+        if worker.service:  # unregister from `Service` queue
+            worker.service.waiting.remove(worker)
+
+        if worker in self.waiting:
+            self.waiting.remove(worker)
+
+        # remove from registry
+        self.workers.pop(worker.address)
+
 

@@ -13,15 +13,18 @@ while True:
 import logging
 import time
 import random
+import threading
 import zmq
 
-HEARTBEAT_LIVENESS = 3  # seconds until heartbeat is expected / queue is considered disconnected
-HEARTBEAT_INTERVAL = 1
+HEARTBEAT_INTERVAL = 1.5  # seconds between a PPP_HEARTBEAT is send to the broker
+HEARTBEAT_LIVENESS = 3  # 3 seconds until PPP_HEARTBEAT is expected from broker or considered dead
+
 INTERVAL_INIT = 1
 INTERVAL_MAX = 32
 
-PPP_READY = "\x01"      # Signals worker is ready
+PPP_READY = "\x01"  # Signals worker is ready
 PPP_HEARTBEAT = "\x02"  # Signals worker heartbeat
+PPP_RECONNECT = "\x03"  # Signals worker re-connect
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +44,9 @@ class EBWorker(object):
     expect_reply = False
     reply_to = None
 
-    heartbeat_at = time.time() + HEARTBEAT_INTERVAL
+    heartbeat_at = None
+
+    heart = None
 
     def __init__(self, broker, service = 'echo'):
 
@@ -50,15 +55,22 @@ class EBWorker(object):
         self.service = service
         self.broker = broker
 
-        # PUSH socket to send broadcast/flow messages to
-        self.sink = self.context.socket(zmq.PUSH)
-        #self.sink.connect('tcp://localhost:5558')
-
         # create client/connection UUID
         self.identity = "%04X-%04X" % (random.randint(0, 0x10000), random.randint(0, 0x10000))
 
         # DEALER socket to get jobs from/to
         self.setup_worker_socket()
+
+        # PUSH socket to send broadcast/flow messages to
+        self.sink = self.context.socket(zmq.PUSH)
+        #self.sink.connect('tcp://localhost:5558')
+
+        self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
+
+        # init heartbeat
+        self.heart = threading.Thread(target=self.setup_heartbeat)
+        self.heart.daemon = True
+        self.heart.start()
 
     def setup_worker_socket(self):
         """Helper function that returns a new configured socket
@@ -87,6 +99,23 @@ class EBWorker(object):
         log.info('sent PPP_READY - register: %s' % self.service)
         self.worker.send_multipart([PPP_READY, self.service])
 
+    def setup_heartbeat(self):
+
+        log.info('setup_heartbeat')
+
+        while True:
+
+            if not self.worker:
+                continue
+
+            self.worker.send(PPP_HEARTBEAT)
+
+            self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
+
+            log.debug("Worker heartbeat SENT")
+
+            time.sleep(HEARTBEAT_INTERVAL)
+
     def recv(self, reply=None):
         """Send reply, if any, to broker and wait for next request."""
         assert reply is not None or not self.expect_reply
@@ -99,9 +128,12 @@ class EBWorker(object):
 
         self.expect_reply = True
 
-        while True:
+        loop = 0
 
-            try:  # poll broker socket for a reply
+        while True:
+            loop += 1
+
+            try:  # poll broker socket
                 socks = dict(self.poller.poll(HEARTBEAT_INTERVAL * 1000))
             except KeyboardInterrupt:
                 log.warn('Keyboard Interrupted')
@@ -116,6 +148,8 @@ class EBWorker(object):
 
                 frames = self.worker.recv_multipart()
 
+                log.debug('FE request')
+
                 # reset heartbeat timeout
                 self.liveness = HEARTBEAT_LIVENESS
                 self.interval = INTERVAL_INIT
@@ -123,6 +157,12 @@ class EBWorker(object):
                 if len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
 
                     log.debug("Queue heartbeat RECEIVED")
+
+                elif len(frames) == 1 and frames[0] == PPP_RECONNECT:
+
+                    log.warning("Queue re-connect RECEIVED")
+
+                    self.reconnect_broker()
 
                 elif len(frames) == 6:
 
@@ -133,7 +173,7 @@ class EBWorker(object):
                     self.reply_to = ident
 
                     # send call back to response sink
-                    self.sink.send('ACCEPTED Job: %s' % request)
+                    # self.sink.send('ACCEPTED Job: %s' % request)
 
                     return frames
 
@@ -143,8 +183,10 @@ class EBWorker(object):
 
             else:  # no response received from router socket
 
+                log.warning('NO response / heartbeat')
+
                 self.liveness -= 1
-                if self.liveness == 1:
+                if self.liveness <= 1:
 
                     log.warn("Heartbeat DEAD (%i seconds) - Reconnecting to Router in %0.2fs" % (
                         HEARTBEAT_LIVENESS, self.interval
@@ -156,19 +198,16 @@ class EBWorker(object):
                     else:
                         self.interval = INTERVAL_INIT
 
-                    # create new socket to broker
-                    self.setup_worker_socket()
-
-                    # reset heartbeat timeout
-                    self.liveness = HEARTBEAT_LIVENESS
-
-            # send max 1 heartbeat per second
-            if time.time() > self.heartbeat_at:
-
-                self.worker.send(PPP_HEARTBEAT)
-                log.debug("Worker heartbeat SENT")
-                self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
+                    self.reconnect_broker()
 
         log.warn('Keyboard Interrupt received, killing worker')
         return None
+
+    def reconnect_broker(self):
+
+        # create new socket to broker
+        self.setup_worker_socket()
+
+        # reset heartbeat timeout
+        self.liveness = HEARTBEAT_LIVENESS
 

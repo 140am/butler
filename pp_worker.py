@@ -32,5 +32,6 @@ if __name__ == '__main__':
         # update json request body
         response = cjson.decode(reply[5])
         response['worker'] = worker.identity
+
         reply[5] = cjson.encode(response)
 

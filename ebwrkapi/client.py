@@ -112,27 +112,29 @@ class EBClient(object):
                     log.warn('got empty reply back from `Broker`')
                     break
 
-                if frames[2].startswith(ebwrkapi.__version__):
+                if len(frames) > 2:
 
-                    # parse response
-                    ident, x, service_name, function, expiration, request_body = frames
+                    if frames[2].startswith(ebwrkapi.__version__):
 
-                    reply = request_body
+                        # parse response
+                        ident, x, service_name, function, expiration, request_body = frames
 
-                    # Don't try to handle errors, just assert noisily
-                    # assert len(msg) >= 3
-                    # compares request sequence id to be in order
-                    if int(service_name.split(':')[1]) == self.sequence:
-                        self.retries = REQUEST_RETRIES
-                        break
-                    else:
-                        log.error("Malformed reply from server: %s / %s" % (self.sequence, service_name.split(':')[1]))
+                        reply = request_body
 
-                        self.retries -= 1
-                        reply = None
+                        # Don't try to handle errors, just assert noisily
+                        # assert len(msg) >= 3
+                        # compares request sequence id to be in order
+                        if int(service_name.split(':')[1]) == self.sequence:
+                            self.retries = REQUEST_RETRIES
+                            break
+                        else:
+                            log.error("Malformed reply from server: %s / %s" % (self.sequence, service_name.split(':')[1]))
+
+                            self.retries -= 1
+                            reply = None
 
                 else:
-                    log.info('got service response: %s' % frames)
+                    log.debug('got service response: %s' % frames)
                     reply = frames
                     break
 
