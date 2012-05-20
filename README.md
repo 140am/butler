@@ -1,12 +1,17 @@
 # ebwrkapi - Encoding Booth Workflow Protocol
 
-The EB module aims to offer a reliable service-oriented request-reply API between
-a set of client applications, a broker and a set of worker applications. Features:
+The EB module aims to offer a high performance, reliable service-oriented
+request-reply API between a set of client applications, a broker and
+a set of worker applications using 0MQ sockets.
 
-- Request / Reply broker to for Client requests
+Requires <http://www.python.org/> and <http://www.zeromq.org/>
+
+
+## Features
+
+- Request / Reply broker for Client requests
 - Service Discovery by adding `mmi.` as prefix to function names
-
-Based on <http://www.python.org/> and 0MQ <http://www.zeromq.org/>
+- Extensible in 28 programming languages
 
 
 ## Getting Started
@@ -29,7 +34,7 @@ Send a request and receive its response.
     response = client.send( 'validate.content', { 'uri' : 'http://www.encodingbooth.com/test.bin' } )
     print response
 
-The default `EBClient.timeout` will wait max `1000` msec (1 second) to be accepted by a `Worker` Server and return a response. The Client can also re-connect and attempt to get 1+ `EBClient.retries` if required.
+The default `EBClient.timeggout` will wait max `1000` msec (1 second) to be accepted by a `Worker` Server and return a response. The Client can also re-connect and attempt to get 1+ `EBClient.retries` if required.
 
 
 ### Worker
@@ -56,11 +61,11 @@ To see if a `Worker` is available right now to handle the named function:
         print 'someone is around to handle %s' % response[0]
 
 
-## Components
+## Spec
 
 ### Client
 
-- Sends Request/Reply transaction to `Broker`
+- Request/Reply transaction with `Broker`
 - Client can control sync / asynchronous behavior via `EBClient.timeout` and `EBClient.retries`
     - Client  wait for at least `EBClient.timeout` value (1000 msec / 1 sec) for response
 - Request Sequence numbering to enforce Request -> Reply pattern
@@ -68,24 +73,26 @@ To see if a `Worker` is available right now to handle the named function:
 
 ### Broker
 
-- pool the BE and FE sockets for messages
+- pool the BE and FE sockets for messages for max HEARTBEAT_INTERVAL msec
 	- _only_ poll the BE socket if no workers are currently registered
-- process Worker messsage
+    - effectively refusing client requests / signalling that no Workers are available
+- process a `Client` request (Front End)
+	- handle internal `mmi.` service call locally
+	- `Worker` service call forwarded to BE routed by `Service`
+- process a `Worker` messsage (Back End)
   	- require_worker = create `Worker` object
+    - `worker_ready` is `false` unless the `Worker` has been already registered
 	- parse message
 		- PPP_READY
-			- attempt to lookup `service` name in `self.services` dict
-              to get a `Service object
+			- attempt to lookup `Service` by name in `self.services`
                 - client requests
                 - waiting workers
             - call `worker_waiting` to signal that Worker is ready to accept Work
 		- PPP_HEARTBEAT
 		- error
-- process a `Client` request
-	- internal `mmi.` service call
-	- Worker` service call forwarded to BE
-- Send Heartbeat Messages to BE
-- Purge expired but registered `Worker`
+- every 1 Second in seperate thread
+    - Purge expired but registered `Worker`
+    - Send PPP_HEARTBEAT to BE for all `Worker` in `self.waiting`
 
 ### Worker
 
@@ -99,22 +106,24 @@ To see if a `Worker` is available right now to handle the named function:
 - send a `reply` to the Client by going through one loop cycle before timeout
 
 
-## Inspiration
-
-- http://zguide.zeromq.org/page:all
-- http://rfc.zeromq.org/spec:9
-- http://rfc.zeromq.org/spec:8
-
-
 ## Performance
 
 Pretty Pretty Good.. The throughput will primarily be limited by the Worker response
 time and not the protocol over head. Benchmarks soon to come.
 
 
+## Inspiration
+
+- http://zguide.zeromq.org/page:all#Heartbeating
+- http://rfc.zeromq.org/spec:9
+- http://rfc.zeromq.org/spec:8
+- Code Snippets from Min RK <benjaminrk@gmail.com>
+- Based on Java example by Arkadiusz Orzechowski
+
+
 ## MIT License
 
-Copyright (c) Manuel Kreutz <http://encodingbooth.com>
+Copyright (c) Manuel Kreutz <http://isprime.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
