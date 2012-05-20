@@ -48,6 +48,8 @@ class EBWorker(object):
 
     heart = None
 
+    sink = None
+
     def __init__(self, broker, service = 'echo'):
 
         self.context = zmq.Context(1)
@@ -58,12 +60,12 @@ class EBWorker(object):
         # create client/connection UUID
         self.identity = "%04X-%04X" % (random.randint(0, 0x10000), random.randint(0, 0x10000))
 
-        # DEALER socket to get jobs from/to
-        self.setup_worker_socket()
-
         # PUSH socket to send broadcast/flow messages to
         self.sink = self.context.socket(zmq.PUSH)
-        #self.sink.connect('tcp://localhost:5558')
+        self.sink.connect('tcp://localhost:5558')
+
+        # DEALER socket to get jobs from/to
+        self.setup_worker_socket()
 
         self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
 
@@ -98,6 +100,8 @@ class EBWorker(object):
         # send `PPP_READY` message to Router
         log.info('sent PPP_READY - register: %s' % self.service)
         self.worker.send_multipart([PPP_READY, self.service])
+
+        self.sink.send('PPP_READY sent')
 
     def setup_heartbeat(self):
 
@@ -173,7 +177,7 @@ class EBWorker(object):
                     self.reply_to = ident
 
                     # send call back to response sink
-                    # self.sink.send('ACCEPTED Job: %s' % request)
+                    self.sink.send('ACCEPTED Job: %s' % request)
 
                     return frames
 
