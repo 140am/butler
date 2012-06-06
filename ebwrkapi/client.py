@@ -9,7 +9,7 @@ import time
 import sys
 import logging
 import random
-import cjson
+import json
 import zmq
 
 import ebwrkapi
@@ -78,7 +78,7 @@ class EBClient(object):
 
             # convert request body dict to json structure
             if isinstance(request, dict):
-                request = cjson.encode(request)
+                request = json.dumps(request)
 
             """ Request Layout:
 

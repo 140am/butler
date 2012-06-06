@@ -12,7 +12,6 @@ broker.run()
 import time
 import logging
 import zmq
-import cjson
 import collections
 import binascii
 import threading
