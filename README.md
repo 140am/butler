@@ -11,7 +11,7 @@ Requires <http://www.python.org/> and <http://www.zeromq.org/>
 
 - Request / Reply broker for Client requests
 - Service Discovery by adding `mmi.` as prefix to function names
-- Extensible in 28 programming languages
+- Extensible in 28 programming languages through `0MQ` sockets
 
 
 ## Getting Started
