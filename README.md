@@ -16,6 +16,12 @@ Requires <http://www.python.org/> and <http://www.zeromq.org/>
 
 ## Getting Started
 
+This asumes the following Services:
+
+- 5555/tcp - Client Frontend
+- 5556/tcp - Worker Backend
+- 5558/tcp - Worker Result Sink
+
 ### Run a Request-Reply Broker
 
 Provides a Client Frontend and Worker Backend.
@@ -30,7 +36,7 @@ Provides a Client Frontend and Worker Backend.
 
 Register a Worker for a specific function and await requests / messages:
 
-    worker = ebwrkapi.EBWorker("tcp://localhost:5556", 'video.cut')
+    worker = ebwrkapi.EBWorker('tcp://localhost:5556', 'validate.content')
     reply = None
     while True:
         request = worker.recv(reply)
