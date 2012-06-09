@@ -26,18 +26,9 @@ Provides a Client Frontend and Worker Backend.
     broker.run()
 
 
-### Send Requests from Client
-
-Send a request and receive its response.
-
-    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
-    response = client.send( 'validate.content', { 'uri' : 'http://www.encodingbooth.com/test.bin' } )
-    print response
-
-The default `EBClient.timeggout` will wait max `1000` msec (1 second) to be accepted by a `Worker` Server and return a response. The Client can also re-connect and attempt to get 1+ `EBClient.retries` if required.
-
-
 ### Worker
+
+Register a Worker for a specific function and await requests / messages:
 
     worker = ebwrkapi.EBWorker("tcp://localhost:5556", 'video.cut')
     reply = None
@@ -51,7 +42,20 @@ The default `EBClient.timeggout` will wait max `1000` msec (1 second) to be acce
         routing messsages here
 
 
-### Result Sink
+### Send Requests from Client
+
+Send a request and receive its response.
+
+    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
+    response = client.send( 'validate.content', { 'uri' : 'http://www.encodingbooth.com/test.bin' } )
+    print response
+
+The default `EBClient.timeggout` will wait max `1000` msec (1 second) to be accepted by a `Worker` Server and return a response. The Client can also re-connect and attempt to get 1+ `EBClient.retries` if required.
+
+
+### Task Result Sink
+
+Will receive event / messages from Worker
 
     sink = ebwrkapi.EBSink('tcp://*:5558')
     while True:
