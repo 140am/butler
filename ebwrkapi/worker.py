@@ -174,9 +174,6 @@ class EBWorker(object):
 
                     self.reply_to = ident
 
-                    # send call back to response sink
-                    self.sink.send('ACCEPTED Job: %s' % request)
-
                     return frames
 
                 else:
