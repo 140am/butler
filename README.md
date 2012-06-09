@@ -53,21 +53,10 @@ The default `EBClient.timeggout` will wait max `1000` msec (1 second) to be acce
 
 ### Result Sink
 
-    context = zmq.Context(1)
-    sink = context.socket(zmq.PULL)
-
-    # setting an identity so worker will buffer outgoing messages in case of downtime
-    sink.setsockopt(zmq.IDENTITY, 'sink')
-    sink.bind("tcp://*:5558")
-
-    poller = zmq.Poller()
-    poller.register(sink, zmq.POLLIN)
-
+    sink = ebwrkapi.EBSink('tcp://*:5558')
     while True:
-        socks = dict(poller.poll())
-        if sink in socks and socks[sink] == zmq.POLLIN:
-            msg = sink.recv()
-            log.debug('MSG received: %s' % msg)
+        msg = sink.get_message()
+        log.info('MSG received: %s' % msg)
 
 
 ### Service Discovery
