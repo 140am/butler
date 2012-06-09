@@ -21,8 +21,8 @@ Requires <http://www.python.org/> and <http://www.zeromq.org/>
 Provides a Client Frontend and Worker Backend.
 
     broker = ebwrkapi.EBBroker()
-    broker.frontend.bind "tcp://*:5555"
-    broker.backend.bind "tcp://*:5556"
+    broker.frontend.bind("tcp://*:5555")
+    broker.backend.bind("tcp://*:5556")
     broker.run()
 
 
