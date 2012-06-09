@@ -101,8 +101,6 @@ class EBWorker(object):
         log.info('sent PPP_READY - register: %s' % self.service)
         self.worker.send_multipart([PPP_READY, self.service])
 
-        self.sink.send('PPP_READY sent')
-
     def setup_heartbeat(self):
 
         log.info('setup_heartbeat')
