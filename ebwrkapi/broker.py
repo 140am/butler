@@ -183,9 +183,9 @@ class EBBroker(object):
                 log.debug('PPP_HEARTBEAT / PING received from worker: %s' % address)
 
                 if worker_ready:  # update expiration date
-                    log.debug('update expiry')
                     worker.expiry = time.time() + HEARTBEAT_LIVENESS
                 else:
+                    log.warn('PPP_HEARTBEAT received but Worker not ready yet')
                     self.delete_worker(worker, True)
 
             else:
