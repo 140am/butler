@@ -132,7 +132,6 @@ class EBWorker(object):
 
     def recv(self, reply=None):
         """Send reply, if any, to broker and wait for next request."""
-        assert reply is not None or not self.expect_reply
 
         if reply is not None:
             # send response to client
@@ -140,79 +139,69 @@ class EBWorker(object):
             reply = [self.reply_to, ''] + reply
             self.worker.send_multipart(reply)
 
-        self.expect_reply = True
+        try:  # poll broker socket
+            socks = dict(self.poller.poll(HEARTBEAT_INTERVAL * 1000))
+        except KeyboardInterrupt:
+            log.warn('Keyboard Interrupted')
+            return  # interrupted
 
-        loop = 0
+        # Handle worker activity on backend
+        if socks.get(self.worker) == zmq.POLLIN:
 
-        while True:
-            loop += 1
+            #  Get message
+            #  - 3-part envelope + content = client request
+            #  - 1-part HEARTBEAT = heartbeat
 
-            try:  # poll broker socket
-                socks = dict(self.poller.poll(HEARTBEAT_INTERVAL * 1000))
-            except KeyboardInterrupt:
-                log.warn('Keyboard Interrupted')
-                break  # interrupted
+            frames = self.worker.recv_multipart()
 
-            # Handle worker activity on backend
-            if socks.get(self.worker) == zmq.POLLIN:
+            log.debug('FE request')
 
-                #  Get message
-                #  - 3-part envelope + content = client request
-                #  - 1-part HEARTBEAT = heartbeat
+            # reset heartbeat timeout
+            self.liveness = HEARTBEAT_LIVENESS
+            self.interval = INTERVAL_INIT
 
-                frames = self.worker.recv_multipart()
+            if len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
 
-                log.debug('FE request')
+                log.debug("Queue heartbeat RECEIVED")
 
-                # reset heartbeat timeout
-                self.liveness = HEARTBEAT_LIVENESS
-                self.interval = INTERVAL_INIT
+            elif len(frames) == 1 and frames[0] == PPP_RECONNECT:
 
-                if len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
+                log.warning("Queue re-connect RECEIVED")
 
-                    log.debug("Queue heartbeat RECEIVED")
+                self.reconnect_broker()
 
-                elif len(frames) == 1 and frames[0] == PPP_RECONNECT:
+            elif len(frames) == 6:
 
-                    log.warning("Queue re-connect RECEIVED")
+                ident, x, service, function, expiration, request = frames
 
-                    self.reconnect_broker()
+                log.debug("New Request: %s" % frames)
 
-                elif len(frames) == 6:
+                self.reply_to = ident
 
-                    ident, x, service, function, expiration, request = frames
+                return frames
 
-                    log.debug("New Request: %s" % frames)
+            else:
+                log.critical("Invalid message: %s" % frames)
+                return
 
-                    self.reply_to = ident
+        else:  # no response received from router socket
 
-                    return frames
+            log.warning('NO response / heartbeat')
 
+            self.liveness -= 1
+            if self.liveness <= 1:
+
+                log.warn("Heartbeat DEAD (%i seconds) - Reconnecting to Router in %0.2fs" % (
+                    HEARTBEAT_LIVENESS, self.interval
+                ))
+                time.sleep(self.interval)
+
+                if self.interval < INTERVAL_MAX:
+                    self.interval *= 2
                 else:
-                    log.critical("Invalid message: %s" % frames)
-                    break
+                    self.interval = INTERVAL_INIT
 
-            else:  # no response received from router socket
-
-                log.warning('NO response / heartbeat')
-
-                self.liveness -= 1
-                if self.liveness <= 1:
-
-                    log.warn("Heartbeat DEAD (%i seconds) - Reconnecting to Router in %0.2fs" % (
-                        HEARTBEAT_LIVENESS, self.interval
-                    ))
-                    time.sleep(self.interval)
-
-                    if self.interval < INTERVAL_MAX:
-                        self.interval *= 2
-                    else:
-                        self.interval = INTERVAL_INIT
-
-                    self.reconnect_broker()
-
-        log.warn('Keyboard Interrupt received, killing worker')
-        return None
+                self.reconnect_broker()
 
     def reconnect_broker(self):
 
