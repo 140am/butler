@@ -139,8 +139,6 @@ class EBBroker(object):
     def process_worker(self):
         """Process Worker Message"""
 
-        log.debug('process_worker call')
-
         # read request from BE
         frames = self.backend.recv_multipart()
         assert len(frames) >= 1
@@ -321,7 +319,7 @@ class EBBroker(object):
             w = self.waiting[0]
             log.debug('purge check: %s' % w)
             if w.expiry < time.time():
-                logging.warning("deleting expired worker: %s", w.address)
+                log.warning("deleting expired worker: %s", w.address)
                 self.waiting.pop(0)
                 self.delete_worker(w, False)
             else:
