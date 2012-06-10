@@ -16,7 +16,7 @@ import random
 import threading
 import zmq
 
-HEARTBEAT_INTERVAL = 1.5  # seconds between a PPP_HEARTBEAT is send to the broker
+HEARTBEAT_INTERVAL = 1  # seconds between a PPP_HEARTBEAT is send to the broker
 HEARTBEAT_LIVENESS = 3  # 3 seconds until PPP_HEARTBEAT is expected from broker or considered dead
 
 INTERVAL_INIT = 1
@@ -105,9 +105,23 @@ class EBWorker(object):
 
         log.info('setup_heartbeat')
 
+        time_run = 0
+
         while True:
 
+            # sync the time between pings due the GIL
+            last_ping = time.time() - time_run
+            if last_ping < HEARTBEAT_INTERVAL:
+                time_sleep = HEARTBEAT_INTERVAL - last_ping
+            else:
+                time_sleep = HEARTBEAT_INTERVAL
+
+            time.sleep(time_sleep)
+
+            time_run = time.time()
+
             if not self.worker:
+                log.warn('NO Worker to sent PPP_HEARTBEAT to')
                 continue
 
             self.worker.send(PPP_HEARTBEAT)
@@ -115,8 +129,6 @@ class EBWorker(object):
             self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
 
             log.debug("Worker heartbeat SENT")
-
-            time.sleep(HEARTBEAT_INTERVAL)
 
     def recv(self, reply=None):
         """Send reply, if any, to broker and wait for next request."""
