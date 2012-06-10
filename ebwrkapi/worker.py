@@ -123,7 +123,7 @@ class EBWorker(object):
         assert reply is not None or not self.expect_reply
 
         if reply is not None:
-            # send response to ACK accepted request/task
+            # send response to client
             assert self.reply_to is not None
             reply = [self.reply_to, ''] + reply
             self.worker.send_multipart(reply)

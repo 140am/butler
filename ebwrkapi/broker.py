@@ -165,7 +165,7 @@ class EBBroker(object):
 
                 # not first command after startup
                 if worker_ready:
-                    log.critical('Late PPP_READY received')
+                    log.critical('Late PPP_READY received - de-register Worker')
                     self.delete_worker(worker, True)
                     return
 
