@@ -133,8 +133,9 @@ time and not the protocol over head. Benchmarks soon to come.
 ## Inspiration
 
 - http://zguide.zeromq.org/page:all#Heartbeating
-- http://rfc.zeromq.org/spec:9
+- http://rfc.zeromq.org/spec:7
 - http://rfc.zeromq.org/spec:8
+- http://rfc.zeromq.org/spec:9
 - Code Snippets from Min RK <benjaminrk@gmail.com>
 - Based on Java example by Arkadiusz Orzechowski
 
