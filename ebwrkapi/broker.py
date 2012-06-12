@@ -179,9 +179,10 @@ class EBBroker(object):
 
             # not first command after startup
             if worker_registered:
-                #log.critical('Late PPP_READY received - de-register Worker')
+                log.critical('Late PPP_READY received - de-register Worker')
                 #self.disconnect_worker( address, worker_uuid )
                 worker = self.workers[worker_uuid]
+                worker.address = address
                 self.worker_waiting(worker)
                 return
 
@@ -273,7 +274,7 @@ class EBBroker(object):
         self.purge_workers()
 
         if service.waiting:
-            log.info("dispatch request: %s" % service.waiting)
+            log.debug("dispatch request: %s" % service.waiting)
         else:
             log.warn('no Worker waiting for Worker - discarding request')
 
@@ -319,6 +320,7 @@ class EBBroker(object):
         service = self.services.get(name)
 
         if not service:
+            log.info('registering new Service: %s' % name)
             service = Service(name)
             self.services[name] = service
         return service
@@ -337,9 +339,7 @@ class EBBroker(object):
             )
             self.workers[worker_uuid] = worker
 
-            log.info("registering new worker: %s | %s" % (
-                worker.uuid, worker
-            ))
+            log.info("registering new Worker: %s | %s" % ( worker.uuid, worker ))
 
         return worker
 

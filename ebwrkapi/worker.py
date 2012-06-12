@@ -202,7 +202,6 @@ class EBWorker(object):
 
         else:  # no response received from router socket
             log.debug('no response')
-            return
 
             self.liveness -= 1
             if self.liveness <= 1:
