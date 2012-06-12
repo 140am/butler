@@ -28,7 +28,6 @@ class EBClient(object):
     poller = None  # zmq.Poller
 
     retries = REQUEST_RETRIES  # count - number of request retries
-    timeout = REQUEST_TIMEOUT  # msec - request timeout
 
     sequence = 0
 
@@ -83,7 +82,7 @@ class EBClient(object):
         """
 
         # request timeout
-        timeout = int(time.time()) + int(REQUEST_TIMEOUT / 1000)
+        timeout = int(round((time.time() * 1000))) + REQUEST_TIMEOUT
 
         msg = [
             '%s:%i' % (ebwrkapi.__version__, self.sequence),
