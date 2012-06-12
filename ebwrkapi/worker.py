@@ -91,7 +91,6 @@ class EBWorker(object):
 
         # create DEALER socket
         self.worker = self.context.socket(zmq.DEALER)
-        self.worker.setsockopt(zmq.LINGER, 0)
         self.worker.setsockopt(zmq.HWM, 1)
 
         # register worker socket with poller

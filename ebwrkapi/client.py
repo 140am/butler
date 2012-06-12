@@ -50,7 +50,6 @@ class EBClient(object):
 
         # create a ZMQ_REQ socket to send requests / receive replies
         self.client = self.context.socket(zmq.REQ)
-        self.client.setsockopt(zmq.LINGER, 0)
         self.client.setsockopt(zmq.HWM, 0)
 
         # register socket with poller
