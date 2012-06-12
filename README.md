@@ -132,7 +132,7 @@ time and not the protocol over head. Benchmarks soon to come.
 
 ## Inspiration
 
-- http://zguide.zeromq.org/page:all#Heartbeating
+- http://zguide.zeromq.org/page:all
 - http://rfc.zeromq.org/spec:7
 - http://rfc.zeromq.org/spec:8
 - http://rfc.zeromq.org/spec:9
