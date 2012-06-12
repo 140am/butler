@@ -13,7 +13,8 @@ while True:
 import logging
 import time
 import random
-import threading
+import multiprocessing
+import uuid
 import zmq
 
 HEARTBEAT_INTERVAL = 1  # seconds between a PPP_HEARTBEAT is send to the broker
@@ -25,6 +26,7 @@ INTERVAL_MAX = 32
 PPP_READY = "\x01"  # Signals worker is ready
 PPP_HEARTBEAT = "\x02"  # Signals worker heartbeat
 PPP_RECONNECT = "\x03"  # Signals worker re-connect
+PPP_REPLY = "\x04"  # Signals worker reply
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +38,6 @@ class EBWorker(object):
     poller = None
     service = None
     worker = None
-    identity = None
 
     liveness = HEARTBEAT_LIVENESS
     interval = INTERVAL_INIT
@@ -50,15 +51,17 @@ class EBWorker(object):
 
     sink = None
 
-    def __init__(self, broker, service = 'echo'):
+    def __init__(self, bind_address, service = 'echo'):
 
         self.context = zmq.Context(1)
-        self.poller = zmq.Poller()
-        self.service = service
-        self.broker = broker
 
-        # create client/connection UUID
-        self.identity = "%04X-%04X" % (random.randint(0, 0x10000), random.randint(0, 0x10000))
+        self.poller = zmq.Poller()
+
+        self.service = service
+
+        self.bind_address = bind_address
+
+        self.uuid = str(uuid.uuid4())
 
         # PUSH socket to send broadcast/flow messages to
         self.sink = self.context.socket(zmq.PUSH)
@@ -67,10 +70,13 @@ class EBWorker(object):
         # DEALER socket to get jobs from/to
         self.setup_worker_socket()
 
+        # init heartbeat
         self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
 
-        # init heartbeat
-        self.heart = threading.Thread(target=self.setup_heartbeat)
+        import threading
+        self.heart = threading.Thread(
+                target = self.setup_heartbeat
+            )
         self.heart.daemon = True
         self.heart.start()
 
@@ -84,28 +90,28 @@ class EBWorker(object):
             self.worker.close()
 
         # create DEALER socket
-        self.worker = self.context.socket(zmq.XREQ)
-
-        # set the `identity` UUID as the worker identify
-        self.worker.setsockopt(zmq.IDENTITY, self.identity)
+        self.worker = self.context.socket(zmq.DEALER)
         self.worker.setsockopt(zmq.LINGER, 0)
-        self.worker.setsockopt(zmq.HWM, 0)
+        self.worker.setsockopt(zmq.HWM, 1)
 
         # register worker socket with poller
         self.poller.register(self.worker, zmq.POLLIN)
 
         # connec to ROUTER socket
-        self.worker.connect(self.broker)
+        self.worker.connect(self.bind_address)
 
         # send `PPP_READY` message to Router
-        log.info('sent PPP_READY - register: %s' % self.service)
-        self.worker.send_multipart([PPP_READY, self.service])
+        self.signal_ready()
 
     def setup_heartbeat(self):
 
-        log.info('setup_heartbeat')
+        log.info('setup_heartbeat with %s' % self.bind_address)
 
         time_run = 0
+
+        heartbeat_socket = self.context.socket(zmq.PUSH)
+
+        heartbeat_socket.connect(self.bind_address)
 
         while True:
 
@@ -115,35 +121,46 @@ class EBWorker(object):
                 time_sleep = HEARTBEAT_INTERVAL - last_ping
             else:
                 time_sleep = HEARTBEAT_INTERVAL
-
+            time_run = time.time()
             time.sleep(time_sleep)
 
-            time_run = time.time()
-
-            if not self.worker:
-                log.warn('NO Worker to sent PPP_HEARTBEAT to')
-                continue
-
-            self.worker.send(PPP_HEARTBEAT)
+            # send the msg together with Worker UUID to Router
+            heartbeat_socket.send_multipart(
+                    [ PPP_HEARTBEAT, self.uuid ]
+                )
 
             self.heartbeat_at = time.time() + HEARTBEAT_INTERVAL
 
-            log.debug("Worker heartbeat SENT")
+            log.debug('Worker heartbeat SENT')
+
+    def signal_ready(self):
+        """ Signals that the Worker is ready to accept work (async job load) """
+        # send `PPP_READY` message to Router
+        log.info('sent PPP_READY - register: %s | %s' % (self.service, self.uuid))
+
+        self.worker.send_multipart(
+                [ PPP_READY, self.uuid, self.service ]
+            )
+
+    def send(self, message):
+        """ Send replies to the Client """
+        assert self.reply_to is not None
+
+        if isinstance(message, str):
+            message = [self.reply_to, message, ]
+
+        msg = [self.reply_to, PPP_REPLY] + message
+        log.debug('sending reply: %s' % msg)
+        self.worker.send_multipart(msg)
 
     def recv(self, reply=None):
         """Send reply, if any, to broker and wait for next request."""
 
         if reply is not None:
-            # send response to client
-            assert self.reply_to is not None
-            reply = [self.reply_to, ''] + reply
-            self.worker.send_multipart(reply)
+            self.send(reply)
 
-        try:  # poll broker socket
-            socks = dict(self.poller.poll(HEARTBEAT_INTERVAL * 1000))
-        except KeyboardInterrupt:
-            log.warn('Keyboard Interrupted')
-            return  # interrupted
+        # poll broker socket - expecting a reply within HEARTBEAT_INTERVAL seconds
+        socks = dict(self.poller.poll(HEARTBEAT_INTERVAL * 1000))
 
         # Handle worker activity on backend
         if socks.get(self.worker) == zmq.POLLIN:
@@ -160,11 +177,11 @@ class EBWorker(object):
             self.liveness = HEARTBEAT_LIVENESS
             self.interval = INTERVAL_INIT
 
-            if len(frames) == 1 and frames[0] == PPP_HEARTBEAT:
+            if frames and frames[0] == PPP_HEARTBEAT:
 
                 log.debug("Queue heartbeat RECEIVED")
 
-            elif len(frames) == 1 and frames[0] == PPP_RECONNECT:
+            elif frames and frames[0] == PPP_RECONNECT:
 
                 log.warning("Queue re-connect RECEIVED")
 
@@ -182,11 +199,10 @@ class EBWorker(object):
 
             else:
                 log.critical("Invalid message: %s" % frames)
-                return
 
         else:  # no response received from router socket
-
-            log.warning('NO response / heartbeat')
+            log.debug('no response')
+            return
 
             self.liveness -= 1
             if self.liveness <= 1:
