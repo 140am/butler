@@ -129,6 +129,8 @@ class EBClient(object):
 
                         self.retries -= 1
                         reply = None
+                else:
+                    reply = frames
 
             else:
                 log.debug('got service response: %s' % frames)
