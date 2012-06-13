@@ -236,7 +236,7 @@ class EBBroker(object):
 
         elif msg:
 
-            log.warn('Invalid worker message received - attempt to send to client: %s' % msg)
+            log.info('Unknown Worker Response - Forwarding to Client: %s' % msg)
 
             self.frontend.send_multipart(msg)
 
