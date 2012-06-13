@@ -277,8 +277,8 @@ class EBBroker(object):
             log.debug("dispatch request: %s" % service.waiting)
         else:
             log.warn('no Worker waiting for Worker - discarding request')
-
-            return self.frontend.send_multipart(msg)
+            empty_msg = msg[:2] + ['404', ]
+            return self.frontend.send_multipart(empty_msg)
 
         if msg is not None:  # queue message in memory
             service.requests.append(msg)
