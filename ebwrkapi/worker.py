@@ -20,7 +20,7 @@ import zmq
 HEARTBEAT_INTERVAL = 1  # seconds between a PPP_HEARTBEAT is send to the broker
 HEARTBEAT_LIVENESS = 3  # 3 seconds until PPP_HEARTBEAT is expected from broker or considered dead
 
-INTERVAL_INIT = 1
+INTERVAL_INIT = 0
 INTERVAL_MAX = 32
 
 PPP_READY = "\x01"  # Signals worker is ready
@@ -157,6 +157,7 @@ class EBWorker(object):
 
         if reply is not None:
             self.send(reply)
+            reply = None
 
         # poll broker socket - expecting a reply within HEARTBEAT_INTERVAL seconds
         socks = dict(self.poller.poll(HEARTBEAT_INTERVAL * 1000))
@@ -210,7 +211,9 @@ class EBWorker(object):
                 ))
                 time.sleep(self.interval)
 
-                if self.interval < INTERVAL_MAX:
+                if not self.interval:
+                    self.interval = 1
+                elif self.interval < INTERVAL_MAX:
                     self.interval *= 2
                 else:
                     self.interval = INTERVAL_INIT
