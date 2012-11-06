@@ -15,7 +15,6 @@ broker.run()
 import time
 import logging
 import zmq
-import collections
 import binascii
 import threading
 
@@ -406,4 +405,3 @@ class EBBroker(object):
 
         # remove from registry
         self.workers.pop(worker.uuid)
-

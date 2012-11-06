@@ -12,8 +12,6 @@ while True:
 
 import logging
 import time
-import random
-import multiprocessing
 import uuid
 import zmq
 
@@ -227,4 +225,3 @@ class EBWorker(object):
 
         # reset heartbeat timeout
         self.liveness = HEARTBEAT_LIVENESS
-

@@ -143,4 +143,3 @@ class EBClient(object):
 
     def destroy(self):
         self.context.term()
-

@@ -14,9 +14,6 @@ worker.sink.send('task received')
 """
 
 import logging
-import time
-import random
-import threading
 import zmq
 
 log = logging.getLogger(__name__)
@@ -59,4 +56,3 @@ class EBSink(object):
             msg = self.sink.recv()
 
         return msg
-
