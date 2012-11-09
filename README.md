@@ -26,7 +26,7 @@ Requires <http://www.python.org/> and <http://www.zeromq.org/>
 - 5558/tcp - Worker Result Sink
 
 
-### Request-Reply Broker
+### Service Router
 
 Provides a Client Frontend and Worker Backend.
 
@@ -36,7 +36,7 @@ Provides a Client Frontend and Worker Backend.
     broker.run()
 
 
-### Worker
+### Service Worker
 
 Register a Service Worker for a specific function and process requests / messages:
 
@@ -51,20 +51,26 @@ Register a Service Worker for a specific function and process requests / message
         reply = 'hello world'
 
 
-### Client Requests
+### Client Request
 
-Send a request to a registered service and receive its response.
+Send a request to a registered service and receive its response. The default `EBClient.timeout` will wait max `2500` msec (2.5 second) for the request to be accepted by a `Worker` Server and return a response. The Client can also re-connect (`EBClient.persistent = False`) and attempt multiple request `EBClient.retries` if required.
+
+#### Remote procedure call (RPC)
+
+    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555').rpc('api.images')
+    client.resize_image()
+
+#### Direct Call
 
     client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
-    response = client.call( 'api.resize_image', {
+    response = client.call( 'api.images', {
+        'method' : 'resize_image',
         'uri' : 'test.jpeg',
         'size' : '150x180'
     })
 
-The default `EBClient.timeout` will wait max `2500` msec (2.5 second) for the request to be accepted by a `Worker` Server and return a response. The Client can also re-connect and attempt to get 1+ `EBClient.retries` if required.
 
-
-### Client - Service Discovery
+#### Service Discovery
 
 To see if a `Service Worker` is available to handle the named function add the `mmi.` prefix to any function calls. Will return `200` if OK or `400` if Service is not available.
 
