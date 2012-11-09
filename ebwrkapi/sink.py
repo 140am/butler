@@ -14,7 +14,7 @@ worker.sink.send('task received')
 """
 
 import logging
-import zmq
+from gevent_zeromq import zmq
 
 log = logging.getLogger(__name__)
 

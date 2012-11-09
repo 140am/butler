@@ -13,10 +13,10 @@ broker.run()
 """
 
 import time
+import gevent
 import logging
-import zmq
-import binascii
-import threading
+
+from gevent_zeromq import zmq
 
 HEARTBEAT_INTERVAL = 1000  # msec between heartbeats sent out
 HEARTBEAT_LIVENESS = 3  # seconds until heartbeat is expected / worker is considered dead
@@ -42,21 +42,23 @@ class Service(object):
         self.requests = []
         self.waiting = []
 
+    def __repr__(self):
+        return '<Service - %s>' % self.name
+
 
 class Worker(object):
     """an idle or active Worker instance"""
 
-    uuid = None
-    identity = None  # hex Identity of worker
     address = None  # routing address
     expiry = None  # expires at this point - unless heartbeat
     service = None  # owning service name if known
 
-    def __init__(self, identity, address, uuid):
-        self.identity = identity
+    def __init__(self, address):
         self.address = address
-        self.uuid = uuid
         self.expiry = time.time() + HEARTBEAT_LIVENESS
+
+    def __repr__(self):
+        return '<Worker - %s>' % self.address
 
 
 class EBBroker(object):
@@ -93,13 +95,12 @@ class EBBroker(object):
         log.info('setup_heartbeat')
 
         heartbeat_socket = self.context.socket(zmq.PUSH)
-
         heartbeat_socket.connect('tcp://localhost:5556')
 
         while True:
 
-            if self.heartbeat_at and time.time() < self.heartbeat_at:
-                time.sleep(0.001)
+            if time.time() < self.heartbeat_at:
+                gevent.sleep(0.001)
                 continue
 
             log.debug('attempting to ping %i worker' % len(self.waiting))
@@ -108,20 +109,12 @@ class EBBroker(object):
 
             for worker in self.waiting:
 
-                log.debug('sending PPP_HEARTBEAT as PPP_REPLY to Worker %s' % worker)
-
-                msg = [PPP_REPLY, worker.uuid, worker.address, PPP_HEARTBEAT]
-
+                msg = [PPP_REPLY, worker.address, PPP_HEARTBEAT]
                 heartbeat_socket.send_multipart(msg)
 
             self.heartbeat_at = time.time() + 1e-3 * HEARTBEAT_INTERVAL
 
-    def run(self):
-
-        # setup Broker Heartbeat
-        self.heart = threading.Thread(target=self.setup_heartbeat)
-        self.heart.daemon = True
-        self.heart.start()
+    def poll_sockets(self):
 
         while True:
 
@@ -147,8 +140,15 @@ class EBBroker(object):
                 log.debug('client FE activity')
                 self.process_client()
 
+    def run(self):
+
+        # setup Broker Heartbeat
+        gevent.spawn(self.setup_heartbeat)
+
+        gevent.spawn(self.poll_sockets).join()
+
     def process_worker(self):
-        """Process Worker Message"""
+        """Process Service Worker Message"""
 
         # read request from BE
         frames = self.backend.recv_multipart()
@@ -158,12 +158,8 @@ class EBBroker(object):
         log.debug('process worker msg: %s' % frames)
 
         # parse response
-        address = frames[0]
-        worker_uuid = frames[2]
+        worker_uuid = frames[0]
         msg = frames[1:]
-
-        # worker had been registered already / active session open
-        worker_registered = worker_uuid in self.workers
 
         # worker control message received
         if not msg:
@@ -171,18 +167,18 @@ class EBBroker(object):
             return
 
         command = msg.pop(0)
-        worker_uuid = msg.pop(0)
 
         # fires via `Worker.__init__`
         if command == PPP_READY:
 
+            # worker had been registered already / active session open
+            worker_registered = worker_uuid in self.workers
+
             # not first command after startup
             if worker_registered:
                 log.critical('Late PPP_READY received - de-register Worker')
-                #self.disconnect_worker( address, worker_uuid )
                 worker = self.workers[worker_uuid]
-                worker.address = address
-                self.worker_waiting(worker)
+                self.delete_worker(worker, disconnect = True)
                 return
 
             service = msg.pop(0)
@@ -192,9 +188,7 @@ class EBBroker(object):
             ))
 
             # create `Worker` object
-            worker = self.require_worker(
-                address, worker_uuid
-            )
+            worker = self.require_worker(worker_uuid)
 
             # attach worker to service and mark as idle
             worker.service = self.require_service(service)
@@ -203,15 +197,15 @@ class EBBroker(object):
 
         elif command == PPP_HEARTBEAT:
 
-            log.debug('PPP_HEARTBEAT received from worker: %s' % worker_uuid)
+            # worker had been registered already / active session open
+            worker_registered = worker_uuid in self.workers
 
-            # go by boardcasted address
-            #worker.address = msg.pop(0)
+            log.debug('PPP_HEARTBEAT received from worker: %s' % worker_uuid)
 
             if not worker_registered:
 
-                log.warn('PPP_HEARTBEAT received but Worker not ready yet')
-                self.disconnect_worker( address, worker_uuid )
+                log.warn('PPP_REPLY received but Worker not registered yet: %s' % worker_uuid)
+                self.disconnect_worker( worker_uuid )
 
             else:
 
@@ -220,24 +214,41 @@ class EBBroker(object):
 
         elif command == PPP_REPLY:
 
-            if not worker_registered:
+            # worker had been registered already / active session open
+            worker_registered = worker_uuid in self.workers
 
-                log.warn('PPP_REPLY received but Worker not registered yet')
-                self.disconnect_worker( address, worker_uuid )
-
-            else:
+            # PPP_REPLY came from worker server
+            if worker_registered:
 
                 worker = self.workers[worker_uuid]
+
+                log.warn('Worker PPP_REPLY received from %s - forward to Client %s' % (
+                    worker_uuid, msg
+                ))
+
+                self.frontend.send_multipart(msg)
+
+                self.worker_waiting(worker)
+
+            # PPP_REPLY should go to a registered Worker server
+            elif frames[2] in self.workers:
+
+                worker = self.workers[frames[2]]
 
                 log.debug('Route PPP_REPLY to Worker: %s' % msg)
 
                 self.backend.send_multipart(msg)
 
+            else:
+                log.warn('Unknown PPP_REPLY received - attempting: %s' % msg)
+
+                # send message to both FE and BE
+                self.frontend.send_multipart(msg)
+                self.backend.send_multipart(msg)
+
         elif msg:
 
-            log.info('Unknown Worker Response - Forwarding to Client: %s' % msg)
-
-            self.frontend.send_multipart(msg)
+            log.info('Unknown Backend Request received: %s' % msg)
 
     def process_client(self):
 
@@ -246,7 +257,7 @@ class EBBroker(object):
 
         assert len(frames) >= 2  # service name + request body
 
-        log.debug('process_client: %s' % frames)
+        log.debug('process client request: %s' % frames)
 
         # parse request
         ident, x, service, function, expiration, request = frames
@@ -288,14 +299,10 @@ class EBBroker(object):
 
             new_worker = service.waiting.pop(0)
 
-            log.debug('forwarding Client request (%s) to Worker BE: %s' % (msg, new_worker))
+            log.debug('forwarding Client request Worker BE: %s' % new_worker)
 
-            # add the destination Worker Identity to the client request
+            # add the Worker address to the request to route the message
             msg.insert(0, new_worker.address)
-
-            log.debug('forwarding Client request (%s) to Worker BE: %s' % (msg, new_worker))
-
-            self.waiting.remove(new_worker)
 
             # send message to backend
             self.backend.send_multipart(msg)
@@ -324,21 +331,17 @@ class EBBroker(object):
             self.services[name] = service
         return service
 
-    def require_worker(self, address, worker_uuid):
+    def require_worker(self, worker_uuid):
         """ Find or create `Worker` record
         """
-        assert (address is not None)
+        assert (worker_uuid is not None)
         worker = self.workers.get(worker_uuid)
 
         if not worker:  # create new `Worker`
-            worker = Worker(
-                binascii.hexlify(address),
-                address,
-                worker_uuid
-            )
+            worker = Worker(worker_uuid)
             self.workers[worker_uuid] = worker
 
-            log.info("registering new Worker: %s | %s" % ( worker.uuid, worker ))
+            log.info("registering new Worker: %s | %s" % ( worker.address, worker ))
 
         return worker
 
@@ -358,45 +361,35 @@ class EBBroker(object):
 
         worker.expiry = time.time() + HEARTBEAT_LIVENESS
 
-        #self.dispatch_request(worker.service, None)
-
     def purge_workers(self):
         """ Look for & kill expired workers.
-        Workers are oldest to most recent, so we stop at the first alive worker.
+        Workers are oldest to most recent.
         """
 
-        while self.waiting:
-            w = self.waiting[0]
-            log.debug('purge check: %s' % w)
-            if w.expiry < time.time():
-                log.warning("deleting expired worker: %s", w.uuid)
+        for worker in self.waiting:
+            if worker.expiry < time.time():
+                log.warning("deleting expired worker: %s", worker.address)
                 self.waiting.pop(0)
-                self.delete_worker(w, False)
-            else:
-                break
+                self.delete_worker(worker, False)
 
-    def disconnect_worker(self, worker_address, worker_uuid):
+    def disconnect_worker(self, worker_address):
 
-        log.warn('send Worker PPP_RECONNECT to %s' % [worker_address, ])
+        log.warn('sent Worker PPP_RECONNECT to: %s' % worker_address)
 
         control_socket = self.context.socket(zmq.PUSH)
         control_socket.connect('tcp://localhost:5556')
-        msg = [PPP_REPLY, worker_uuid, worker_address, PPP_RECONNECT]
+        msg = [PPP_REPLY, worker_address, PPP_RECONNECT]
         control_socket.send_multipart(msg)
         control_socket.close()
 
     def delete_worker(self, worker, disconnect = False):
         """Deletes worker from all data structures, and deletes worker."""
+
         assert worker is not None
 
-        if disconnect:  # send re-connect msg to worker
-            self.disconnect_worker(
-                    worker.address, worker.uuid
-                )
-
-        # unregister from `Service` queue
-        if worker.service:
-            worker.service.waiting.remove(worker)
+        if worker.service is not None:
+            if worker in worker.service.waiting:
+                worker.service.waiting.remove(worker)
 
         while True:
             if worker in self.waiting:
@@ -404,4 +397,7 @@ class EBBroker(object):
             else: break
 
         # remove from registry
-        self.workers.pop(worker.uuid)
+        self.workers.pop(worker.address)
+
+        if disconnect:  # send re-connect msg to worker
+            self.disconnect_worker(worker.address)
