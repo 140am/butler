@@ -206,7 +206,7 @@ class EBWorker(object):
 
                 self.reply_to = ident
 
-                return frames
+                return request
 
             else:
                 log.critical("Invalid message: %s" % frames)
