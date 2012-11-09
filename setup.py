@@ -7,12 +7,12 @@ README = open(os.path.join(here, 'README.md')).read()
 
 setup(
     name = 'ebwrkapi',
-    version = '0.0.1',
+    version = '0.1.0',
     author = 'Manuel Kreutz',
-    author_email = 'mk@isprime.com',
-    description = 'Encoding Booth Distributed Computing Workflow Protocol',
+    author_email = 'manuel@140.am',
+    description = 'ØMQ based Service Worker Framework',
     license = 'Other/Proprietary License',
-    url = 'https://github.com/140am/ebwrkapi',
+    url = 'https://github.com/gosupreme/ebwrkapi',
     packages=['ebwrkapi'],
     long_description=README,
     classifiers=[
@@ -32,5 +32,7 @@ setup(
     ],
     install_requires = [
         'pyzmq == 2.1.10',
+        'gevent',
+        'gevent_zeromq'
     ]
 )
