@@ -19,6 +19,38 @@ REQUEST_TIMEOUT = 2500
 log = logging.getLogger(__name__)
 
 
+class RPCProxyCall:
+    def __init__(self, client_obj, service_name, service_attr):
+        self.service = service_name
+        self.service_attr = service_attr
+        self.client = client_obj
+
+    def __call__(self, *args, **kwargs):
+        self.client.retries = 2
+
+        response = self.client.call(
+            self.service, self.service_attr
+        )
+        # service returning `404` is considered a non implemented function
+        if response == '404':
+            raise AttributeError('%r object has no attribute %r' % (
+                type(self).__name__, self.service_attr
+            ))
+        else:
+            return response
+
+
+class RPCProxy(object):
+
+    def __init__(self, client_obj, service_name):
+        self.service = service_name
+        self.client = client_obj
+        self.client.persistent = False
+
+    def __getattr__(self, attr):
+        return RPCProxyCall(self.client, self.service, attr)
+
+
 class EBClient(object):
 
     broker = None  # 0MQ address - example: tcp://127.0.0.1:5555
@@ -91,6 +123,9 @@ class EBClient(object):
                 round(time.time() * 1000) + (REQUEST_TIMEOUT * REQUEST_RETRIES)
             )
 
+        if not self.retries:
+            self.retries = REQUEST_RETRIES
+
         # attempt to get a response from router up to REQUEST_RETRIES times
         while self.retries:
 
@@ -106,7 +141,7 @@ class EBClient(object):
             # in case persistent is disabled re-send and connect on each retry attempt
             if self.persistent and self.retries == REQUEST_RETRIES:
                 self.client.send_multipart(msg)
-            elif not self.persistent and self.retries != REQUEST_RETRIES:
+            elif not self.persistent:
                 self.client.send_multipart(msg)
 
             socks = dict(self.poller.poll(int(self.timeout * 1000)))
@@ -167,4 +202,11 @@ class EBClient(object):
                 else:
                     log.debug('no response from router - aborting')
 
-        return reply
+        return reply.pop()
+
+    def rpc(self, service_name):
+
+        self.rpc_proxy = RPCProxy(
+            self, service_name
+        )
+        return self.rpc_proxy
