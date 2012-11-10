@@ -202,7 +202,8 @@ class EBClient(object):
                 else:
                     log.debug('no response from router - aborting')
 
-        return reply.pop()
+        if reply:
+            return reply.pop()
 
     def rpc(self, service_name):
 
