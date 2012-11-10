@@ -372,6 +372,10 @@ class EBBroker(object):
                 self.waiting.pop(0)
                 self.delete_worker(worker, False)
 
+        for service_name in self.services.keys():
+            if not self.services[service_name].waiting:
+                self.services.pop(service_name)
+
     def disconnect_worker(self, worker_address):
 
         log.warn('sent Worker PPP_RECONNECT to: %s' % worker_address)
