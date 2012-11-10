@@ -10,10 +10,13 @@ while True:
         break  # worker was interrupted / stopped
 """
 
-import logging
 import time
 import uuid
+import json
+import sys
+import cPickle
 import gevent
+import logging
 
 from gevent_zeromq import zmq
 
@@ -62,6 +65,8 @@ class EBWorker(object):
         self.bind_address = bind_address
 
         self.uuid = str(uuid.uuid4())
+
+        self.rpc_registry = {}
 
         # PUSH socket to send broadcast/flow messages to
         self.sink = self.context.socket(zmq.PUSH)
@@ -200,11 +205,12 @@ class EBWorker(object):
 
             elif len(frames) == 6:
 
-                ident, x, service, function, expiration, request = frames
+                # parse client request
+                client_ident, x, api_version, service_name, expiration, request = frames
 
                 log.debug("New Request: %s" % frames)
 
-                self.reply_to = ident
+                self.reply_to = client_ident
 
                 return request
 
@@ -240,3 +246,44 @@ class EBWorker(object):
 
         # reset heartbeat timeout
         self.liveness = HEARTBEAT_LIVENESS
+    def register_function(self, function_callback, function_name = None):
+        """ registers a python RPC function """
+
+        if not function_name:
+            function_name = function_callback.func_name
+
+        log.debug('RPC register_function: %s as "%s"' % (
+            function_callback, function_name
+        ))
+        self.rpc_registry[function_name] = function_callback
+
+    def run(self):
+        reply = None
+
+        while True:
+
+            log.debug('polling for work (reply: %s)' % reply)
+
+            request = self.recv(reply)
+            reply = None
+
+            if not request:
+                log.debug('empty `request` received')
+                continue
+
+            log.debug('got RPC request to process: %s' % request)
+
+            rpc_request = json.loads(request)
+
+            if rpc_request['method'] in self.rpc_registry:
+                try:
+                    reply = self.rpc_registry[rpc_request['method']](
+                            *rpc_request['args'],
+                            **rpc_request['kwargs']
+                        )
+                except:
+                    reply = '500:exception:%s' % cPickle.dumps(
+                        sys.exc_info()[1]
+                    )
+            else:
+                reply = '404'

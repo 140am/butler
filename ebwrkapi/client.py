@@ -9,6 +9,7 @@ import time
 import logging
 import json
 import uuid
+import cPickle
 from gevent_zeromq import zmq
 
 import ebwrkapi
@@ -20,6 +21,7 @@ log = logging.getLogger(__name__)
 
 
 class RPCProxyCall:
+
     def __init__(self, client_obj, service_name, service_attr):
         self.service = service_name
         self.service_attr = service_attr
@@ -29,13 +31,20 @@ class RPCProxyCall:
         self.client.retries = 2
 
         response = self.client.call(
-            self.service, self.service_attr
+            self.service, {
+                'method' : self.service_attr,
+                'args' : args,
+                'kwargs' : kwargs
+            }
         )
+
         # service returning `404` is considered a non implemented function
         if response == '404':
             raise AttributeError('%r object has no attribute %r' % (
                 type(self).__name__, self.service_attr
             ))
+        elif response.startswith('500:exception:'):
+            raise cPickle.loads(response[14:])
         else:
             return response
 
