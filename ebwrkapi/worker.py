@@ -246,13 +246,20 @@ class EBWorker(object):
 
         # reset heartbeat timeout
         self.liveness = HEARTBEAT_LIVENESS
+
+    def register(self, object_callback):
+        """Register a python object for RPC use"""
+
+        log.debug('RPC register object: %s' % object_callback)
+        self.rpc_registry['.'] = object_callback
+
     def register_function(self, function_callback, function_name = None):
         """ registers a python RPC function """
 
         if not function_name:
             function_name = function_callback.func_name
 
-        log.debug('RPC register_function: %s as "%s"' % (
+        log.debug('RPC register function: %s as "%s"' % (
             function_callback, function_name
         ))
         self.rpc_registry[function_name] = function_callback
@@ -275,9 +282,22 @@ class EBWorker(object):
 
             rpc_request = json.loads(request)
 
+            # single methods have been registered
             if rpc_request['method'] in self.rpc_registry:
                 try:
                     reply = self.rpc_registry[rpc_request['method']](
+                            *rpc_request['args'],
+                            **rpc_request['kwargs']
+                        )
+                except:
+                    reply = '500:exception:%s' % cPickle.dumps(
+                        sys.exc_info()[1]
+                    )
+
+            # object has been registered for callbacks
+            elif '.' in self.rpc_registry:
+                try:
+                    reply = getattr(self.rpc_registry['.'], rpc_request['method'])(
                             *rpc_request['args'],
                             **rpc_request['kwargs']
                         )

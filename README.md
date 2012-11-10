@@ -41,6 +41,16 @@ Register a function for RPC calls:
     worker.register_function(resize_image)
     worker.run()
 
+Register a object and all its methods for RPC calls:
+
+    class RPCService(object):
+        def resize_image(self, name, size):
+            return 'resized image'
+
+    worker.register(return 'resized image'())
+    worker.run()
+
+
 ##### Advanced Usage
 
 Optionally functions can be registerd under a different name:
