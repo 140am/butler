@@ -10,25 +10,16 @@ Requires <http://www.python.org/> and <http://www.zeromq.org/>
 ## Features
 
 - Service Registration for Worker
-- Request / Reply broker for Client requests
 - Heartbeat between Workers and Router (both direction)
 - Service Discovery by adding `mmi.` as prefix to service calls
-- Extensible in 28 programming languages through `ØMQ` sockets
+- First Class Exception Handling
 
----
 
-## Components
-
-### Provided Network Services
-
-- 5555/tcp - Client Frontend
-- 5556/tcp - Worker Backend
-- 5558/tcp - Worker Result Sink
-
+## Usage
 
 ### Service Router
 
-Provides a Client Frontend and Worker Backend.
+Create a Client Frontend and Worker Backend.
 
     broker = ebwrkapi.EBBroker()
     broker.frontend.bind("tcp://*:5555")
@@ -38,9 +29,26 @@ Provides a Client Frontend and Worker Backend.
 
 ### Service Worker
 
-Register a Service Worker for a specific function and process requests / messages:
+Register a Worker under a specific Service name:
 
-    service = ebwrkapi.EBWorker('tcp://127.0.0.1:5556', 'api.resize_image')
+    service = ebwrkapi.EBWorker('tcp://127.0.0.1:5556', 'api.images')
+
+Register a function for RPC calls:
+
+    def resize_image(name, size):
+        return 'resized image'
+
+    worker.register_function(resize_image)
+    worker.run()
+
+##### Advanced Usage
+
+Optionally functions can be registerd under a different name:
+
+    worker.register_function(resize_image, 'resize')
+
+Process incoming Direct Requests / Messages manually:
+
     reply = None
     while True:
         request = service.recv(reply)
@@ -53,14 +61,25 @@ Register a Service Worker for a specific function and process requests / message
 
 ### Client Request
 
-Send a request to a registered service and receive its response. The default `EBClient.timeout` will wait max `2500` msec (2.5 second) for the request to be accepted by a `Worker` Server and return a response. The Client can also re-connect (`EBClient.persistent = False`) and attempt multiple request `EBClient.retries` if required.
+Send a request to a registered service and receive its response. The default `EBClient.timeout` will wait max `2500` msec (2.5 second) for the request to be accepted by a `Worker` and return a response. The Client can optionally also automatically re-connect (`EBClient.persistent = False`) and attempt multiple times (`EBClient.retries`) if required.
 
-#### Remote procedure call (RPC)
+#### Remote procedure call (RPC) on a Service
 
     client = ebwrkapi.EBClient('tcp://127.0.0.1:5555').rpc('api.images')
-    client.resize_image()
+    client.resize_image('test.jpeg', '150x180')
 
-#### Direct Call
+#### Exceptions during RPC
+
+    try:
+        client.resize_image()
+    except Exception, e:
+        # TypeError: resize_image() takes exactly 2 argument (0 given)
+
+#### Advanced Usage
+
+##### Direct Request
+
+Optionally you can also call and introspect available Services directly:
 
     client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
     response = client.call( 'api.images', {
@@ -70,12 +89,12 @@ Send a request to a registered service and receive its response. The default `EB
     })
 
 
-#### Service Discovery
+##### Service Discovery
 
 To see if a `Service Worker` is available to handle the named function add the `mmi.` prefix to any function calls. Will return `200` if OK or `400` if Service is not available.
 
     client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
-    response = client.send( 'mmi.api.resize_image' )
+    response = client.send( 'mmi.api.images' )
     if response[1] == '200':
         print 'someone is around to handle %s' % response[0]
 
@@ -93,10 +112,11 @@ Optional extension to receive event / messages from Service Worker
 
 ## Spec
 
-* Client : REQ ->
-* Broker : ROUTER <-> ROUTER
-* Worker : DEALER ->
-* Sink : PULL
+### Provided Network Services
+
+- 5555/tcp - Client Frontend
+- 5556/tcp - Worker Backend
+- 5558/tcp - Worker Result Sink
 
 
 ### Message Format
@@ -108,14 +128,16 @@ ident, x, service, function, expiration, request = frames
 address, command, worker_uuid, msg (service) = frames
 
 
-### Client
+### Workflow
+
+#### Client 
 
 - Request/Reply transaction with `Broker`
 - Client can control sync / asynchronous behavior via `EBClient.timeout` and `EBClient.retries`
 - Optional Request Sequence numbering to enforce Request -> Reply pattern
 
 
-### Request-Reply Broker
+#### Router
 
 * bind two ROUTER sockets on `frontend` and `backend`
 * two Poller: `pull_backends` or `pull_both`
@@ -189,7 +211,7 @@ address, command, worker_uuid, msg (service) = frames
             * self.frontend.send_multipart(msg)
 
 
-### Service Worker
+#### Service Worker
 
 - Connects to `Broker` socket via `ØMQ` socket
 - Sends `PPP_READY` Message to `Broker` BE
@@ -200,21 +222,13 @@ address, command, worker_uuid, msg (service) = frames
     - Broker will not issue new Tasks to the Worker
 - send a `reply` to the Client by going through one loop cycle before timeout
 
----
 
-## ØMQ Glossary
+#### ØMQ Sockets
 
-### REQ
-REQ sockets prepend an empty message frame to every message you send and removes the empty message frame from each message you receive. It also imposes a strict send / receive cycle.
-
-### ROUTER
-Prepends an envelope with reply address to each message it receives, before passing it to the application. It also chops off the envelope (the first message frame) from each message it sends and uses that reply address to decide which peer the message should go to. It is how a ØMQ network with no state can create round-trip request-reply dialogs.
-
-### DEALER
-Just deals out the messages you send to all connected peers (aka "round-robin"), and deals in (aka "fair queuing") the messages it receives.
-
-### PULL
-Messages are fair-queued from among all connected upstream nodes.
+* Client : REQ ->
+* Broker : ROUTER <-> ROUTER
+* Worker : DEALER ->
+* Sink : PULL
 
 ---
 
