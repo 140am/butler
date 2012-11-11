@@ -13,6 +13,7 @@ broker.run()
 """
 
 import time
+import datetime
 import gevent
 import logging
 
@@ -38,6 +39,7 @@ class Service(object):
     waiting = None  # List of waiting workers
 
     def __init__(self, name):
+        self.updated_at = datetime.datetime.now()
         self.name = name
         self.requests = []
         self.waiting = []
@@ -92,7 +94,7 @@ class EBBroker(object):
 
     def setup_heartbeat(self):
 
-        log.info('setup_heartbeat')
+        log.debug('Setup Heartbeat')
 
         heartbeat_socket = self.context.socket(zmq.PUSH)
         heartbeat_socket.connect('tcp://localhost:5556')
@@ -183,7 +185,7 @@ class EBBroker(object):
 
             service = msg.pop(0)
 
-            log.info('PPP_READY received from "%s" worker: %s' % (
+            log.debug('PPP_READY received from "%s" worker: %s' % (
                 service, worker_uuid
             ))
 
@@ -210,6 +212,7 @@ class EBBroker(object):
             else:
 
                 worker = self.workers[worker_uuid]
+
                 worker.expiry = time.time() + HEARTBEAT_LIVENESS
 
         elif command == PPP_REPLY:
@@ -222,7 +225,7 @@ class EBBroker(object):
 
                 worker = self.workers[worker_uuid]
 
-                log.warn('Worker PPP_REPLY received from %s - forward to Client %s' % (
+                log.debug('Worker PPP_REPLY received from %s - forward to Client %s' % (
                     worker_uuid, msg
                 ))
 
@@ -357,6 +360,7 @@ class EBBroker(object):
             self.waiting.append(worker)
 
         if worker not in worker.service.waiting:
+            worker.service.updated_at = datetime.datetime.now()
             worker.service.waiting.append(worker)
 
         worker.expiry = time.time() + HEARTBEAT_LIVENESS
@@ -374,7 +378,11 @@ class EBBroker(object):
 
         for service_name in self.services.keys():
             if not self.services[service_name].waiting:
-                self.services.pop(service_name)
+                if self.services[service_name].updated_at <= (
+                    datetime.datetime.now() - datetime.timedelta(hours = 1)
+                ):
+                    log.warn('deleting expired Service: %s' % service_name)
+                    self.services.pop(service_name)
 
     def disconnect_worker(self, worker_address):
 
