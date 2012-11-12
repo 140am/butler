@@ -10,7 +10,7 @@ setup(
     version = '0.1.0',
     author = 'Manuel Kreutz',
     author_email = 'manuel@140.am',
-    description = 'ØMQ based Service Worker Framework',
+    description = '0MQ based Service Worker Framework',
     license = 'Other/Proprietary License',
     url = 'https://github.com/gosupreme/ebwrkapi',
     packages=['ebwrkapi'],
@@ -31,7 +31,7 @@ setup(
         'License :: Other/Proprietary License'
     ],
     install_requires = [
-        'pyzmq == 2.1.10',
+        'pyzmq==2.2.0',
         'gevent',
         'gevent_zeromq'
     ]
