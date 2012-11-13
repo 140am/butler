@@ -6,14 +6,14 @@ here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.md')).read()
 
 setup(
-    name = 'ebwrkapi',
-    version = '0.1.0',
+    name = 'butler',
+    version = '0.2.0',
     author = 'Manuel Kreutz',
     author_email = 'manuel@140.am',
-    description = '0MQ based Service Worker Framework',
+    description = '0MQ based Service Oriented RPC Framework',
     license = 'Other/Proprietary License',
-    url = 'https://github.com/gosupreme/ebwrkapi',
-    packages=['ebwrkapi'],
+    url = 'https://github.com/encodingbooth/butler',
+    packages=['butler'],
     long_description=README,
     classifiers=[
         'Development Status :: 4 - Beta',

@@ -12,7 +12,7 @@ import uuid
 import cPickle
 from gevent_zeromq import zmq
 
-import ebwrkapi
+import butler
 
 REQUEST_RETRIES = 1
 REQUEST_TIMEOUT = 2500
@@ -141,7 +141,7 @@ class EBClient(object):
             self.sequence += 1
 
             msg = [
-                '%s:%s' % (ebwrkapi.__version__, self.sequence),
+                '%s:%s' % (butler.__version__, self.sequence),
                 str(service),
                 str(request_expiration),
                 str(request)
@@ -167,10 +167,10 @@ class EBClient(object):
                 if len(frames) > 2:
 
                     # ensure the msg can be understood / protocol API version
-                    if frames[2].startswith(ebwrkapi.__version__):
+                    if frames[2].startswith(butler.__version__):
 
                         log.debug('API %s msg received: %s' % (
-                            ebwrkapi.__version__, frames
+                            butler.__version__, frames
                         ))
 
                         # parse response

@@ -1,18 +1,17 @@
-# ebwrkapi - ØMQ based Service Worker Framework
+# butler - ØMQ based Service Oriented Framework
 
-The EB service worker framework aims to offer a simple but high performance and 
-reliable service-oriented request-reply API between large number of client applications, 
+The butler framework aims to offer a simple but high performance and reliable
+service-oriented request-reply API between large number of client applications, 
 a broker and worker applications using ØMQ sockets.
-
-Requires <http://www.python.org/> and <http://www.zeromq.org/>
 
 
 ## Features
 
 - Service Registration for Worker
 - Heartbeat between Workers and Router (both direction)
-- Service Discovery by adding `mmi.` as prefix to service calls
 - First Class Exception Handling
+- Gevent Support
+- Service Discovery by adding `mmi.` as prefix to service calls
 
 
 ## Usage
@@ -21,7 +20,7 @@ Requires <http://www.python.org/> and <http://www.zeromq.org/>
 
 Create a Client Frontend and Worker Backend.
 
-    broker = ebwrkapi.EBBroker()
+    broker = butler.Router()
     broker.frontend.bind("tcp://*:5555")
     broker.backend.bind("tcp://*:5556")
     broker.run()
@@ -31,7 +30,7 @@ Create a Client Frontend and Worker Backend.
 
 Register a Worker under a specific Service name:
 
-    service = ebwrkapi.EBWorker('tcp://127.0.0.1:5556', 'api.images')
+    service = butler.Service('tcp://127.0.0.1:5556', 'api.images')
 
 Register a function for RPC calls:
 
@@ -47,7 +46,7 @@ Register a object and all its methods for RPC calls:
         def resize_image(self, name, size):
             return 'resized image'
 
-    worker.register(return 'resized image'())
+    worker.register(RPCService())
     worker.run()
 
 
@@ -71,11 +70,11 @@ Process incoming Direct Requests / Messages manually:
 
 ### Client Request
 
-Send a request to a registered service and receive its response. The default `EBClient.timeout` will wait max `2500` msec (2.5 second) for the request to be accepted by a `Worker` and return a response. The Client can optionally also automatically re-connect (`EBClient.persistent = False`) and attempt multiple times (`EBClient.retries`) if required.
+Send a request to a registered service and receive its response. The default `Client.timeout` will wait max `2500` msec (2.5 second) for the request to be accepted by a `Worker` and return a response. The Client can optionally also automatically re-connect (`Client.persistent = False`) and attempt multiple times (`Client.retries`) if required.
 
 #### Remote procedure call (RPC) on a Service
 
-    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555').rpc('api.images')
+    client = butler.Client('tcp://127.0.0.1:5555').rpc('api.images')
     client.resize_image('test.jpeg', '150x180')
 
 #### Exceptions during RPC
@@ -91,7 +90,7 @@ Send a request to a registered service and receive its response. The default `EB
 
 Optionally you can also call and introspect available Services directly:
 
-    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
+    client = butler.Client('tcp://127.0.0.1:5555')
     response = client.call( 'api.images', {
         'method' : 'resize_image',
         'uri' : 'test.jpeg',
@@ -103,7 +102,7 @@ Optionally you can also call and introspect available Services directly:
 
 To see if a `Service Worker` is available to handle the named function add the `mmi.` prefix to any function calls. Will return `200` if OK or `400` if Service is not available.
 
-    client = ebwrkapi.EBClient('tcp://127.0.0.1:5555')
+    client = butler.Client('tcp://127.0.0.1:5555')
     response = client.send( 'mmi.api.images' )
     if response[1] == '200':
         print 'someone is around to handle %s' % response[0]
@@ -113,7 +112,7 @@ To see if a `Service Worker` is available to handle the named function add the `
 
 Optional extension to receive event / messages from Service Worker
 
-    sink = ebwrkapi.EBSink('tcp://*:5558')
+    sink = butler.Sink('tcp://*:5558')
     while True:
         msg = sink.get_message()
         log.info('MSG received: %s' % msg)
@@ -143,7 +142,7 @@ address, command, worker_uuid, msg (service) = frames
 #### Client 
 
 - Request/Reply transaction with `Broker`
-- Client can control sync / asynchronous behavior via `EBClient.timeout` and `EBClient.retries`
+- Client can control sync / asynchronous behavior via `Client.timeout` and `Client.retries`
 - Optional Request Sequence numbering to enforce Request -> Reply pattern
 
 
@@ -151,7 +150,7 @@ address, command, worker_uuid, msg (service) = frames
 
 * bind two ROUTER sockets on `frontend` and `backend`
 * two Poller: `pull_backends` or `pull_both`
-* start via `EBBroker().run()`
+* start via `Router().run()`
 
 * `setup_heartbeat` in seperate green thread (greenlet)
     * send PPP_HEARTBEAT via PUSH socket to `backend`
@@ -244,7 +243,6 @@ address, command, worker_uuid, msg (service) = frames
 
 ## Inspiration
 
-- http://zguide.zeromq.org/page:all
 - http://rfc.zeromq.org/spec:7
 - http://rfc.zeromq.org/spec:8
 - http://rfc.zeromq.org/spec:9
@@ -255,7 +253,7 @@ address, command, worker_uuid, msg (service) = frames
 
 ## MIT License
 
-Copyright (c) Manuel Kreutz <manuel@140.am>
+Copyright (c) 2012 Manuel Kreutz, Encoding Booth LLC
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

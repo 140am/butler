@@ -4,12 +4,12 @@ Provides a PULL zeromq socket to receive Worker messages/events
 
 Example Usage:
 
-sink = ebwrkapi.EBSink('tcp://*:5558')
+sink = butler.Sink('tcp://*:5558')
 while True:
     msg = sink.get_message()
     log.info('MSG received: %s' % msg)
 
-worker = ebwrkapi.EBWorker("tcp://localhost:5556", 'image.validate')
+worker = butler.Service("tcp://localhost:5556", 'image.validate')
 worker.sink.send('task received')
 """
 

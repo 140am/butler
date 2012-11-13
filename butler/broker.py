@@ -6,10 +6,10 @@ internal / external networks.
 
 Example Usage:
 
-broker = ebwrkapi.EBBroker()
-broker.frontend.bind("tcp://*:5555")
-broker.backend.bind("tcp://*:5556")
-broker.run()
+router = butler.Router()
+router.frontend.bind("tcp://*:5555")
+router.backend.bind("tcp://*:5556")
+router.run()
 """
 
 import time
@@ -63,7 +63,7 @@ class Worker(object):
         return '<Worker - %s>' % self.address
 
 
-class EBBroker(object):
+class EBRouter(object):
 
     heart = None
 
@@ -144,7 +144,7 @@ class EBBroker(object):
 
     def run(self):
 
-        # setup Broker Heartbeat
+        # setup router Heartbeat
         gevent.spawn(self.setup_heartbeat)
 
         gevent.spawn(self.poll_sockets).join()
@@ -355,7 +355,7 @@ class EBBroker(object):
                 worker, len(self.waiting)
             ))
 
-        # Queue to broker and service waiting lists
+        # Queue to router and service waiting lists
         if worker not in self.waiting:
             self.waiting.append(worker)
 
