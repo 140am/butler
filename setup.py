@@ -31,8 +31,7 @@ setup(
         'License :: Other/Proprietary License'
     ],
     install_requires = [
-        'pyzmq==2.2.0',
-        'gevent',
-        'gevent_zeromq'
+        'pyzmq==2.2.0.1',
+        'gevent'
     ]
 )

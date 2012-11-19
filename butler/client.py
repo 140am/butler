@@ -10,8 +10,7 @@ import logging
 import json
 import uuid
 import cPickle
-from gevent_zeromq import zmq
-
+import zmq.green as zmq
 import butler
 
 REQUEST_RETRIES = 1

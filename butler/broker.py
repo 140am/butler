@@ -16,8 +16,7 @@ import time
 import datetime
 import gevent
 import logging
-
-from gevent_zeromq import zmq
+import zmq.green as zmq
 
 HEARTBEAT_INTERVAL = 1000  # msec between heartbeats sent out
 HEARTBEAT_LIVENESS = 3  # seconds until heartbeat is expected / worker is considered dead

@@ -17,8 +17,7 @@ import sys
 import cPickle
 import gevent
 import logging
-
-from gevent_zeromq import zmq
+import zmq.green as zmq
 
 HEARTBEAT_INTERVAL = 1  # seconds between a PPP_HEARTBEAT is send to the broker
 HEARTBEAT_LIVENESS = 3  # 3 seconds until PPP_HEARTBEAT is expected from broker or considered dead
