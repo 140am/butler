@@ -179,8 +179,8 @@ class EBRouter(object):
 
             # not first command after startup
             if worker_registered:
-                log.critical('Late PPP_READY received - de-register Worker')
                 worker = self.workers[worker_uuid]
+                log.critical('Late PPP_READY received - de-register Worker: %s' % worker)
                 self.delete_worker(worker, disconnect = True)
                 return
 
@@ -290,7 +290,7 @@ class EBRouter(object):
         if service.waiting:
             log.debug("dispatch request: %s" % service.waiting)
         else:
-            log.warn('no Worker waiting for Worker - discarding request')
+            log.warn('no Worker available for "%s" - discarding request' % service)
             empty_msg = msg[:2] + ['404', ]
             return self.frontend.send_multipart(empty_msg)
 

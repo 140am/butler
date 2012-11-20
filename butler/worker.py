@@ -205,14 +205,14 @@ class EBWorker(object):
                 # parse client request
                 client_ident, x, api_version, service_name, expiration, request = frames
 
-                log.debug("New Request: %s" % frames)
+                log.debug('New Request: %s' % frames)
 
                 self.reply_to = client_ident
 
                 return request
 
             else:
-                log.critical("Invalid message: %s" % frames)
+                log.critical('Invalid Request: %s' % frames)
 
         else:  # no response received from router socket
             log.debug('no response from Router')
@@ -221,7 +221,7 @@ class EBWorker(object):
             if self.liveness <= 1:
 
                 log.warn("Heartbeat DEAD (%i seconds) - Reconnecting to Router in %0.2fs" % (
-                    HEARTBEAT_LIVENESS, self.interval
+                    self.liveness, self.interval
                 ))
                 gevent.sleep(self.interval)
 
