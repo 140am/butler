@@ -28,7 +28,7 @@ class RPCProxyCall:
         self.client = client_obj
 
     def __call__(self, *args, **kwargs):
-        self.client.retries = 2
+        self.client.retries = 1
 
         response = self.client.call(
             self.service, {
@@ -43,7 +43,7 @@ class RPCProxyCall:
             raise AttributeError('%r object has no attribute %r' % (
                 type(self).__name__, self.service_attr
             ))
-        elif response.startswith('500:exception:'):
+        elif response and response.startswith('500:exception:'):
             raise cPickle.loads(response[14:])
         else:
             return response
