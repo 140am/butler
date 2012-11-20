@@ -101,7 +101,7 @@ class EBRouter(object):
         while True:
 
             if time.time() < self.heartbeat_at:
-                gevent.sleep(0)
+                gevent.sleep(0.1)
                 continue
 
             log.debug('attempting to ping %i worker' % len(self.waiting))
