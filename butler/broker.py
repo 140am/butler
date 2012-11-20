@@ -101,7 +101,7 @@ class EBRouter(object):
         while True:
 
             if time.time() < self.heartbeat_at:
-                gevent.sleep(0.001)
+                gevent.sleep(0)
                 continue
 
             log.debug('attempting to ping %i worker' % len(self.waiting))
@@ -125,6 +125,8 @@ class EBRouter(object):
                 poller = self.pull_backends
             else:
                 poller = self.poll_both
+
+            gevent.sleep(0)
 
             # poll socket for request message up to HEARTBEAT_INTERVAL seconds
             socks = dict(poller.poll(HEARTBEAT_INTERVAL))

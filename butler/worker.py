@@ -177,12 +177,10 @@ class EBWorker(object):
         # poll broker socket - expecting a reply within HEARTBEAT_INTERVAL seconds
         socks = dict(self.poller.poll(HEARTBEAT_INTERVAL * 1000))
 
+        gevent.sleep(0)
+
         # Handle worker activity on backend
         if socks.get(self.worker) == zmq.POLLIN:
-
-            #  Get message
-            #  - 3-part envelope + content = client request
-            #  - 1-part HEARTBEAT = heartbeat
 
             frames = self.worker.recv_multipart()
 

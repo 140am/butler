@@ -10,8 +10,9 @@ import logging
 import json
 import uuid
 import cPickle
-import zmq.green as zmq
 import butler
+import gevent
+import zmq.green as zmq
 
 REQUEST_RETRIES = 1
 REQUEST_TIMEOUT = 2500
