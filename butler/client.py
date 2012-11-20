@@ -136,26 +136,26 @@ class EBClient(object):
 
         # request expiration time in milliseconds
         request_expiration = int(
-                round(time.time() * 1000) + (REQUEST_TIMEOUT * REQUEST_RETRIES)
+                round(time.time() + (self.timeout * REQUEST_RETRIES)) * 1000
             )
 
-        if not self.retries:
-            self.retries = REQUEST_RETRIES
+        request_retries = REQUEST_RETRIES
 
         # attempt to get a response from router up to REQUEST_RETRIES times
-        while self.retries:
+        while request_retries > 0:
 
-            self.sequence += 1
+            request_sequence = str(uuid.uuid4())
 
             msg = [
-                '%s:%s' % (butler.__version__, self.sequence),
+                '',
+                '%s:%s' % (butler.__version__, request_sequence),
                 str(service),
                 str(request_expiration),
                 str(request)
             ]
 
             # in case persistent is disabled re-send and connect on each retry attempt
-            if self.persistent and self.retries == REQUEST_RETRIES:
+            if self.persistent and request_retries == REQUEST_RETRIES:
                 self.client.send_multipart(msg)
             elif not self.persistent:
                 self.client.send_multipart(msg)
