@@ -100,7 +100,7 @@ class EBClient(object):
 
         while time.time() < time_expiration:
 
-            gevent.sleep(0)
+            gevent.sleep(0.001)
 
             socks = dict(self.poller.poll(1000))
 
@@ -148,7 +148,7 @@ class EBClient(object):
                 reply = self.response.pop(orig_request_sequence)
                 response_poll.kill()
                 break
-            gevent.sleep(0)
+            gevent.sleep(0.001)
 
         return reply
 
