@@ -82,6 +82,8 @@ class EBClient(object):
 
     persistent = True
 
+    response = {}
+
     def __init__(self, bind_address):
 
         self.uuid = str(uuid.uuid4())
@@ -94,6 +96,62 @@ class EBClient(object):
 
         self.connect_to_broker()
 
+    def poll_for_reply(self, orig_request_sequence, time_expiration):
+
+        while time.time() < time_expiration:
+
+            gevent.sleep(0)
+
+            socks = dict(self.poller.poll(1000))
+
+            if socks.get(self.client) == zmq.POLLIN:
+
+                # receive its response
+                frames = self.client.recv_multipart()
+
+                if not frames:
+                    log.warn('got empty reply back from `Broker`')
+                    continue
+
+                if len(frames) > 2:
+
+                    # ensure the msg can be understood / protocol API version
+                    if frames[1].startswith(butler.__version__):
+
+                        log.debug('API %s msg received: %s' % (
+                            butler.__version__, frames
+                        ))
+
+                        # ident, service_name, function, expiration, request_body = frames
+                        x, api_call, request_body = frames
+
+                        # take the API version / request sequence apart
+                        request_sequence = api_call.split('%s:' % butler.__version__)[1]
+
+                        self.response[request_sequence] = request_body
+
+                        if orig_request_sequence == request_sequence:
+                            break
+                    else:
+                        log.warn('Invalid API msg received: %s' % frames)
+
+                else:
+                    log.warn('raw response received: %s' % frames)
+            else:
+                log.debug('no response from router')
+
+    def find_local_reply(self, orig_request_sequence, time_expiration, response_poll):
+
+        while time.time() < time_expiration:
+            reply = None
+            if orig_request_sequence in self.response:
+                reply = self.response.pop(orig_request_sequence)
+                response_poll.kill()
+                break
+            gevent.sleep(0)
+
+        return reply
+
     def connect_to_broker(self):
 
         # close existing socket
@@ -102,7 +160,7 @@ class EBClient(object):
             self.client.close()
 
         # create a ZMQ_REQ socket to send requests / receive replies
-        self.client = self.context.socket(zmq.REQ)
+        self.client = self.context.socket(zmq.DEALER)
         self.client.setsockopt(zmq.HWM, 0)
         self.client.linger = 1
         self.client.setsockopt(zmq.IDENTITY, self.uuid)
@@ -160,66 +218,31 @@ class EBClient(object):
             elif not self.persistent:
                 self.client.send_multipart(msg)
 
-            socks = dict(self.poller.poll(int(self.timeout * 1000)))
+            log.debug('sending request [%s | %s | %s]: %s' % (
+                self.timeout, service, request_sequence, json.loads(request)['method']
+            ))
 
-            if socks.get(self.client) == zmq.POLLIN:
+            time_end = time.time() + self.timeout
 
-                # receive its response
-                frames = self.client.recv_multipart()
+            # after dispatching the request poll up to max timeout for response
+            response_poll = gevent.spawn(
+                self.poll_for_reply, request_sequence, time_end
+            )
 
-                if not frames:
-                    log.warn('got empty reply back from `Broker`')
-                    return reply
+            # at same time look for the per process stored response
+            response_reply = gevent.spawn(
+                    self.find_local_reply, request_sequence, time_end, response_poll
+                )
 
-                if len(frames) > 2:
+            gevent.joinall(
+                [ response_poll, response_reply ]
+            )
 
-                    # ensure the msg can be understood / protocol API version
-                    if frames[2].startswith(butler.__version__):
+            reply = response_reply.value
 
-                        log.debug('API %s msg received: %s' % (
-                            butler.__version__, frames
-                        ))
+            request_retries -= 1
 
-                        # parse response
-                        ident, service_name, function, expiration, request_body = frames
-
-                        reply = request_body
-
-                        # Don't try to handle errors, just assert noisily
-                        # assert len(msg) >= 3
-                        # compares request sequence id to be in order
-                        if int(service_name.split(':')[1]) == self.sequence:
-                            self.retries = REQUEST_RETRIES
-                            return
-                        else:
-                            log.error('Malformed reply from server: %s / %s' % (
-                                self.sequence, service_name.split(':')[1]
-                            ))
-
-                            self.retries -= 1
-                            reply = None
-                    else:
-                        log.warn('Invalid API msg received: %s' % frames)
-                        reply = frames
-
-                else:
-                    log.debug('raw response received: %s' % frames)
-                    reply = frames
-
-                break
-            else:
-
-                if self.retries:
-                    log.debug('no response from router - re-attempting')
-                    self.retries -= 1
-
-                    if not self.persistent:
-                        self.connect_to_broker()
-                else:
-                    log.debug('no response from router - aborting')
-
-        if reply:
-            return reply.pop()
+        return reply
 
     def rpc(self, service_name):
 

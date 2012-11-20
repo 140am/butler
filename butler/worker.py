@@ -164,7 +164,7 @@ class EBWorker(object):
         #if isinstance(message, str):
         #    message = [self.reply_to, message, ]
 
-        msg = [PPP_REPLY, self.reply_to, '', message]
+        msg = [PPP_REPLY, self.reply_to, '', self.api_call, message]
         log.debug('sending reply: %s' % msg)
         self.worker.send_multipart(msg)
 
@@ -203,11 +203,12 @@ class EBWorker(object):
             elif len(frames) == 6:
 
                 # parse client request
-                client_ident, x, api_version, service_name, expiration, request = frames
+                client_ident, x, api_call, service_name, expiration, request = frames
 
                 log.debug('New Request: %s' % frames)
 
                 self.reply_to = client_ident
+                self.api_call = api_call
 
                 return request
 
