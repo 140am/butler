@@ -371,8 +371,8 @@ class EBRouter(object):
 
         for worker in self.waiting:
             if worker.expiry < time.time():
-                log.warning("deleting expired worker: %s", worker.address)
-                self.waiting.pop(0)
+                log.warning("deleting expired worker: %s" % worker.address)
+                self.waiting.remove(worker)
                 self.delete_worker(worker, False)
 
         for service_name in self.services.keys():
