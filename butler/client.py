@@ -56,6 +56,13 @@ class RPCProxy(object):
         self.client = client_obj
         self.client.persistent = False
 
+    def __setattr__(self, attr, value):
+        # handle setting of `Client.timeout`
+        if attr == 'timeout':
+            self.client.timeout = value
+        else:
+            super(RPCProxy, self).__setattr__(attr, value)
+
     def __getattr__(self, attr):
         return RPCProxyCall(self.client, self.service, attr)
 
