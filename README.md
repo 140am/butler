@@ -15,6 +15,11 @@ and go at anytime to make adjusting a cluster size dynamically based on workload
 - Service Discovery by adding `mmi.` as prefix to service calls
 
 
+## Installation
+
+    easy_install butler
+
+
 ## Usage
 
 ### Service Router
