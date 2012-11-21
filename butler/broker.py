@@ -264,22 +264,24 @@ class EBRouter(object):
         log.debug('process client request: %s' % frames)
 
         # parse request
-        ident, x, service, function, expiration, request = frames
+        ident, null, request_id, service_name, request_expiration, request = frames
 
         # discared if request is expired
-        if int(expiration) < int(round((time.time() * 1000))):
-            log.warn('request expired at: %s' % expiration)
+        if int(request_expiration) < int(round((time.time() * 1000))):
+            log.warn('request expired at: %s' % request_expiration)
             return
 
-        if function.startswith('mmi.'):
+        if service_name.startswith('mmi.'):
 
             log.debug('internal service call')
             self.service_lookup(frames)
 
         else:
+            log.info('new request: %s | %s' % (service_name, request_id))
 
-            log.info('new request: %s | %s' % (function, service))
-            self.dispatch_request( self.require_service(function), frames )
+            self.dispatch_request(
+                self.require_service(service_name), frames
+            )
 
     def dispatch_request(self, service, msg):
 

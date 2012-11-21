@@ -165,6 +165,7 @@ class EBWorker(object):
         #    message = [self.reply_to, message, ]
 
         msg = [PPP_REPLY, self.reply_to, '', self.api_call, message]
+
         log.debug('sending reply: %s' % msg)
         self.worker.send_multipart(msg)
 
@@ -174,10 +175,10 @@ class EBWorker(object):
         if reply is not None:
             self.send(reply)
 
+        gevent.sleep(0)
+
         # poll broker socket - expecting a reply within HEARTBEAT_INTERVAL seconds
         socks = dict(self.poller.poll(HEARTBEAT_INTERVAL * 1000))
-
-        gevent.sleep(0)
 
         # Handle worker activity on backend
         if socks.get(self.worker) == zmq.POLLIN:
@@ -266,11 +267,10 @@ class EBWorker(object):
         reply = None
 
         while True:
-
             log.debug('polling for work (reply: %s)' % reply)
 
             request = self.recv(reply)
-            reply = None
+            reply = None  # reset response
 
             if not request:
                 log.debug('empty `request` received')
@@ -278,6 +278,7 @@ class EBWorker(object):
 
             log.debug('got RPC request to process: %s' % request)
 
+            # accepts JSON requests
             rpc_request = json.loads(request)
 
             # single methods have been registered
