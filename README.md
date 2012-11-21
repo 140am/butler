@@ -1,8 +1,9 @@
 # butler - ØMQ based Service Oriented Framework
 
-The butler framework aims to offer a simple but high performance and reliable
-service-oriented request-reply API between large number of client applications, 
-a broker and worker applications using ØMQ sockets.
+The `butler` framework aims to offer a simple but high performance and reliable
+service-oriented request-reply API between a large number of clients and services
+through a central router using ØMQ sockets. Clients and services can come
+and go at anytime to make adjusting a cluster size dynamically based on workload easy.
 
 
 ## Features
@@ -10,7 +11,7 @@ a broker and worker applications using ØMQ sockets.
 - Service Registration for Worker
 - Heartbeat between Workers and Router (both direction)
 - First Class Exception Handling
-- Gevent Support
+- Gevent Support (Asynchronous Calls and Worker within greenlets)
 - Service Discovery by adding `mmi.` as prefix to service calls
 
 
@@ -18,17 +19,18 @@ a broker and worker applications using ØMQ sockets.
 
 ### Service Router
 
-Create a Client Frontend and Worker Backend.
+Start a Router to provide a Client Frontend and Worker Backend.
 
     broker = butler.Router()
     broker.frontend.bind("tcp://*:5555")
     broker.backend.bind("tcp://*:5556")
     broker.run()
 
+The `frontend` and `backend` sockets allow the bridging of internal and public external networks.
 
 ### Service Worker
 
-Register a Worker under a specific Service name:
+Register a Service Worker under a specific name:
 
     service = butler.Service('tcp://127.0.0.1:5556', 'api.images')
 
@@ -40,7 +42,11 @@ Register a function for RPC calls:
     worker.register_function(resize_image)
     worker.run()
 
-Register a object and all its methods for RPC calls:
+Optionally functions can be exposed under a different name:
+
+    worker.register_function(resize_image, 'resize')
+
+You can also register an object and all its methods for RPC calls:
 
     class RPCService(object):
         def resize_image(self, name, size):
@@ -50,29 +56,11 @@ Register a object and all its methods for RPC calls:
     worker.run()
 
 
-##### Advanced Usage
-
-Optionally functions can be registerd under a different name:
-
-    worker.register_function(resize_image, 'resize')
-
-Process incoming Direct Requests / Messages manually:
-
-    reply = None
-    while True:
-        request = service.recv(reply)
-        reply = None  # reset state
-        if not request:
-            continue
-        # do work
-        reply = 'hello world'
-
-
 ### Client Request
 
-Send a request to a registered service and receive its response. The default `Client.timeout` will wait max `2500` msec (2.5 second) for the request to be accepted by a `Worker` and return a response. The Client can optionally also automatically re-connect (`Client.persistent = False`) and attempt multiple times (`Client.retries`) if required.
-
 #### Remote procedure call (RPC) on a Service
+
+Send a request to a registered service and receive its response.
 
     client = butler.Client('tcp://127.0.0.1:5555').rpc('api.images')
     client.resize_image('test.jpeg', '150x180')
@@ -84,21 +72,51 @@ Send a request to a registered service and receive its response. The default `Cl
     except Exception, e:
         # TypeError: resize_image() takes exactly 2 argument (0 given)
 
-#### Advanced Usage
+#### Timeouts and Default Behavior
 
-##### Direct Request
+With the default `Client.timeout` requests will take max `2500` msec (2.5 seconds) to be accepted
+by a `Service Worker` and return a response or error. The Client can optionally also automatically
+re-connect (`Client.persistent = False`) and attempt multiple times (`Client.retries`) if required.
 
-Optionally you can also call and introspect available Services directly:
+
+### Task Result Sink
+
+Optional extension to receive event / messages from Service Worker in a central place.
+
+    sink = butler.Sink('tcp://*:5558')
+    while True:
+        msg = sink.get_message()
+        log.info('MSG received: %s' % msg)
+
+
+## Advanced Usage
+
+#### Direct Calls / Request Processing
+
+You can also call and introspect available Services directly:
 
     client = butler.Client('tcp://127.0.0.1:5555')
+
     response = client.call( 'api.images', {
         'method' : 'resize_image',
         'uri' : 'test.jpeg',
         'size' : '150x180'
     })
 
+Process incoming Direct Requests / Messages manually:
 
-##### Service Discovery
+    service = butler.Service('tcp://127.0.0.1:5556', 'api.images')
+
+    reply = None
+    while True:
+        request = service.recv(reply)
+        reply = None  # reset state
+        if not request:
+            continue
+        # do work
+        reply = 'hello world'
+
+#### Service Discovery
 
 To see if a `Service Worker` is available to handle the named function add the `mmi.` prefix to any function calls. Will return `200` if OK or `400` if Service is not available.
 
@@ -108,136 +126,100 @@ To see if a `Service Worker` is available to handle the named function add the `
         print 'someone is around to handle %s' % response[0]
 
 
-### Task Result Sink
-
-Optional extension to receive event / messages from Service Worker
-
-    sink = butler.Sink('tcp://*:5558')
-    while True:
-        msg = sink.get_message()
-        log.info('MSG received: %s' % msg)
-
----
-
 ## Spec
 
-### Provided Network Services
+### ØMQ Socket Layout
 
-- 5555/tcp - Client Frontend
-- 5556/tcp - Worker Backend
-- 5558/tcp - Worker Result Sink
+* Client : DEALER ->
+* Broker : ROUTER <- LRU Queue -> ROUTER
+* Worker : DEALER ->
+* Sink : PULL
 
 
 ### Message Format
 
-* Client Requests
-ident, x, service, function, expiration, request = frames
-
-* Worker Request
-address, command, worker_uuid, msg (service) = frames
+All messages are seperated by ØMQ frames (zmq_msg_t objects).
 
 
-### Workflow
+#### Client
 
-#### Client 
+    * Request
+    client_ident, null, api_version:request_id, service_name, request_expiration, request
 
-- Request/Reply transaction with `Broker`
-- Client can control sync / asynchronous behavior via `Client.timeout` and `Client.retries`
-- Optional Request Sequence numbering to enforce Request -> Reply pattern
-
-
-#### Router
-
-* bind two ROUTER sockets on `frontend` and `backend`
-* two Poller: `pull_backends` or `pull_both`
-* start via `Router().run()`
-
-* `setup_heartbeat` in seperate green thread (greenlet)
-    * send PPP_HEARTBEAT via PUSH socket to `backend`
-    * `self.purge_workers()` all `self.waiting` records
-    * go over all worker records in `self.waiting`
-    * send PPP_HEARTBEAT to each worker record using PPP_REPLY
-
-* endless loop - `pull_backends` if no self.workers otherwise `pull_both`
-
-* response on `frontend`: self.process_client()
-
-    * `function` starts with `mmi.`
-        * service_name in self.services
-        * self.frontend.send_multipart([service_name, returncode])
-
-    * otherwise
-    self.dispatch_request( self.require_service(function), frames )
-        * self.purge_workers()
-            * check Worker.expiry time of each Worker
-            * self.delete_worker()
-                * remove from `worker.service.waiting`
-                * remove from `self.workers`
-        * ensure Worker available in `service.waiting`
-        * go over all `service.requests` `msg` records
-            * add `service.waiting.address` into msg at 0
-            * remove Worker from `self.waiting`
-            * self.backend.send_multipart(msg)
-
-* response on `backend`: self.process_worker()
-
-    * Process message
-
-        * Incoming ROUTER Msg: `[PPP_REPLY, worker_uuid, worker_address, PPP_RECONNECT]`
-        * ROUTER adds source `address` at beginning of message
-        * Outgoing ROUTER Msg: address, command, worker_uuid, msg
-            * address = Client
-            * command = PPP_REPLY
-            * worker_uuid = worker_uuid
-            * msg = [worker_address, PPP_RECONNECT]
-
-    * Process message based on `command`
-        * PPP_READY : register Worker
-            * if `worker_registered`
-                * send `[PPP_REPLY, worker_uuid, worker_address, PPP_RECONNECT]`
-
-            * self.require_worker -> self.workers[worker_uuid]
-            * self.require_service -> self.services[Service.name]
-            * self.worker_waiting ->
-                * add to `self.waiting`
-                * add to `worker.service.waiting`
-                * update `worker.expiry`
-
-        * PPP_HEARTBEAT : update Worker.expiry
-            * if not registered -> self.disconnect_worker()
-                * send `[PPP_REPLY, worker_uuid, worker_address, PPP_RECONNECT]`
-
-            * update `worker.expiry`
-
-        * PPP_REPLY : route PPP_REPLY msg to Worker
-            * if not registered -> self.disconnect_worker()
-                * send `[PPP_REPLY, worker_uuid, worker_address, PPP_RECONNECT]`
-
-            * lookup worker in `self.workers`
-            * self.backend.send_multipart(msg)
-
-        * any : forward to client via `frontend` socket
-            * self.frontend.send_multipart(msg)
+    * Response
+    null, api_version:request_id, response
 
 
-#### Service Worker
+##### RPC - JSON `request` and `response`
 
-- Connects to `Broker` socket via `ØMQ` socket
-- Sends `PPP_READY` Message to `Broker` BE
-- Goes into polling state calling #recv on the `Broker` BE socket
-- `Worker` running in while loop until empty/invalid Response received OR keyboard interrupt signal
-- processes each received `request` messages
-    - Broker will not receive any Heartbeats until Worker is done
-    - Broker will not issue new Tasks to the Worker
-- send a `reply` to the Client by going through one loop cycle before timeout
+To support a remote procedure call (RPC) the Client `request` need to be
+JSON encoded and conform to the following format:
+
+    * RPC Request
+    {
+        "method": "rpc_function_name",
+        "args": [],
+        "kwargs": {}
+    }
+
+In case of errors during the RPC the `response` will contain an error code
+and optionally the python exception object as a pickled representation using
+the `pickle` module.
+
+    * Error Response - Function not Implemented
+    '404'
+
+    * Error Response - Exception Raised
+    '500:exception:PICKLESTRING'
 
 
-#### ØMQ Sockets
+#### Worker :: Outgoing to Router
 
-* Client : REQ ->
-* Broker : ROUTER <-> ROUTER
-* Worker : DEALER ->
-* Sink : PULL
+    * Service Registration
+    PPP_READY, service_name
+
+    * Router Heartbeat
+    PPP_HEARTBEAT
+
+    * Client reply
+    PPP_REPLY, reply_ident, null, api_version:request_id, response
+
+
+#### Router :: Incoming from Worker
+
+    worker_ident, command, *
+
+    * Worker - PPP_READY
+    worker_ident, PPP_READY, service_name
+
+    * Worker - PPP_HEARTBEAT
+    worker_ident, PPP_HEARTBEAT
+
+    * Worker - PPP_REPLY (Worker > Client)
+    worker_ident, PPP_REPLY, client_message
+
+
+#### Router :: Outgoing to Worker
+
+    router_ident, PPP_REPLY, worker_ident, *
+
+    * Worker Heartbeat
+    PPP_REPLY, worker_ident, PPP_HEARTBEAT
+
+    * Worker Re-Connect
+    PPP_REPLY, worker_ident, PPP_RECONNECT
+
+
+#### Worker :: Incoming from Router
+
+    * Client Request (6 frames)
+    client_ident, null, api_version:request_id, service_name, request_expiration, request
+
+    * Router Heartbeat
+    PPP_HEARTBEAT
+
+    * Router Re-Registration Request
+    PPP_RECONNECT
 
 ---
 
