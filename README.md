@@ -21,10 +21,10 @@ and go at anytime to make adjusting a cluster size dynamically based on workload
 
 Start a Router to provide a Client Frontend and Worker Backend.
 
-    broker = butler.Router()
-    broker.frontend.bind("tcp://*:5555")
-    broker.backend.bind("tcp://*:5556")
-    broker.run()
+    router = butler.Router()
+    router.frontend.bind("tcp://*:5555")
+    router.backend.bind("tcp://*:5556")
+    router.run()
 
 The `frontend` and `backend` sockets allow the bridging of internal and public external networks.
 
@@ -32,7 +32,7 @@ The `frontend` and `backend` sockets allow the bridging of internal and public e
 
 Register a Service Worker under a specific name:
 
-    service = butler.Service('tcp://127.0.0.1:5556', 'api.images')
+    worker = butler.Service('tcp://127.0.0.1:5556', 'api.images')
 
 Register a function for RPC calls:
 
@@ -105,11 +105,11 @@ You can also call and introspect available Services directly:
 
 Process incoming Direct Requests / Messages manually:
 
-    service = butler.Service('tcp://127.0.0.1:5556', 'api.images')
+    worker = butler.Service('tcp://127.0.0.1:5556', 'api.images')
 
     reply = None
     while True:
-        request = service.recv(reply)
+        request = worker.recv(reply)
         reply = None  # reset state
         if not request:
             continue
