@@ -17,8 +17,9 @@ and go at anytime to make adjusting a cluster size dynamically based on workload
 
 ## Installation
 
-    easy_install butler
-
+```python
+easy_install butler
+```
 
 ## Usage
 
@@ -26,10 +27,12 @@ and go at anytime to make adjusting a cluster size dynamically based on workload
 
 Start a Router to provide a Client Frontend and Worker Backend.
 
-    router = butler.Router()
-    router.frontend.bind("tcp://*:5555")
-    router.backend.bind("tcp://*:5556")
-    router.run()
+```python
+router = butler.Router()
+router.frontend.bind("tcp://*:5555")
+router.backend.bind("tcp://*:5556")
+router.run()
+```
 
 The `frontend` and `backend` sockets allow the bridging of internal and public external networks.
 
@@ -37,29 +40,36 @@ The `frontend` and `backend` sockets allow the bridging of internal and public e
 
 Register a Service Worker under a specific name:
 
-    worker = butler.Service('tcp://127.0.0.1:5556', 'api.images')
+```python
+worker = butler.Service('tcp://127.0.0.1:5556', 'api.images')
+```
 
 Register a function for RPC calls:
 
-    def resize_image(name, size):
-        return 'resized image'
+```python
+def resize_image(name, size):
+    return 'resized image'
 
-    worker.register_function(resize_image)
-    worker.run()
+worker.register_function(resize_image)
+worker.run()
+```
 
 Optionally functions can be exposed under a different name:
 
-    worker.register_function(resize_image, 'resize')
+```python
+worker.register_function(resize_image, 'resize')
+```
 
 You can also register an object and all its methods for RPC calls:
 
-    class RPCService(object):
-        def resize_image(self, name, size):
-            return 'resized image'
+```python
+class RPCService(object):
+    def resize_image(self, name, size):
+        return 'resized image'
 
-    worker.register(RPCService())
-    worker.run()
-
+worker.register(RPCService())
+worker.run()
+```
 
 ### Client Request
 
@@ -67,15 +77,19 @@ You can also register an object and all its methods for RPC calls:
 
 Send a request to a registered service and receive its response.
 
-    client = butler.Client('tcp://127.0.0.1:5555').rpc('api.images')
-    client.resize_image('test.jpeg', '150x180')
+```python
+client = butler.Client('tcp://127.0.0.1:5555').rpc('api.images')
+client.resize_image('test.jpeg', '150x180')
+```
 
 #### Exceptions during RPC
 
-    try:
-        client.resize_image()
-    except Exception, e:
-        # TypeError: resize_image() takes exactly 2 argument (0 given)
+```python
+try:
+    client.resize_image()
+except Exception, e:
+    # TypeError: resize_image() takes exactly 2 argument (0 given)
+```
 
 #### Timeouts and Default Behavior
 
@@ -88,10 +102,12 @@ re-connect (`Client.persistent = False`) and attempt multiple times (`Client.ret
 
 Optional extension to receive event / messages from Service Worker in a central place.
 
-    sink = butler.Sink('tcp://*:5558')
-    while True:
-        msg = sink.get_message()
-        log.info('MSG received: %s' % msg)
+```python
+sink = butler.Sink('tcp://*:5558')
+while True:
+    msg = sink.get_message()
+    log.info('MSG received: %s' % msg)
+```
 
 
 ## Advanced Usage
@@ -100,36 +116,41 @@ Optional extension to receive event / messages from Service Worker in a central 
 
 You can also call and introspect available Services directly:
 
-    client = butler.Client('tcp://127.0.0.1:5555')
+```python
+client = butler.Client('tcp://127.0.0.1:5555')
 
-    response = client.call( 'api.images', {
-        'method' : 'resize_image',
-        'uri' : 'test.jpeg',
-        'size' : '150x180'
-    })
+response = client.call( 'api.images', {
+    'method' : 'resize_image',
+    'uri' : 'test.jpeg',
+    'size' : '150x180'
+})
+```
 
 Process incoming Direct Requests / Messages manually:
 
-    worker = butler.Service('tcp://127.0.0.1:5556', 'api.images')
+```python
+worker = butler.Service('tcp://127.0.0.1:5556', 'api.images')
 
-    reply = None
-    while True:
-        request = worker.recv(reply)
-        reply = None  # reset state
-        if not request:
-            continue
-        # do work
-        reply = 'hello world'
+reply = None
+while True:
+    request = worker.recv(reply)
+    reply = None  # reset state
+    if not request:
+        continue
+    # do work
+    reply = 'hello world'
+```
 
 #### Service Discovery
 
 To see if a `Service Worker` is available to handle the named function add the `mmi.` prefix to any function calls. Will return `200` if OK or `400` if Service is not available.
 
-    client = butler.Client('tcp://127.0.0.1:5555')
-    response = client.send( 'mmi.api.images' )
-    if response[1] == '200':
-        print 'someone is around to handle %s' % response[0]
-
+```python
+client = butler.Client('tcp://127.0.0.1:5555')
+response = client.send( 'mmi.api.images' )
+if response[1] == '200':
+    print 'someone is around to handle %s' % response[0]
+```
 
 ## Spec
 
@@ -160,12 +181,13 @@ All messages are seperated by ØMQ frames (zmq_msg_t objects).
 To support a remote procedure call (RPC) the Client `request` need to be
 JSON encoded and conform to the following format:
 
-    * RPC Request
-    {
-        "method": "rpc_function_name",
-        "args": [],
-        "kwargs": {}
-    }
+```python
+{
+    "method": "rpc_function_name",
+    "args": [],
+    "kwargs": {}
+}
+```
 
 In case of errors during the RPC the `response` will contain an error code
 and optionally the python exception object as a pickled representation using
@@ -226,7 +248,6 @@ the `pickle` module.
     * Router Re-Registration Request
     PPP_RECONNECT
 
----
 
 ## Inspiration
 
@@ -236,7 +257,6 @@ the `pickle` module.
 - Code Snippets from Min RK <benjaminrk@gmail.com>
 - Java example by Arkadiusz Orzechowski
 
----
 
 ## MIT License
 
