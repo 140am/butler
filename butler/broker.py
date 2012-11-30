@@ -20,7 +20,6 @@ import zmq.green as zmq
 
 HEARTBEAT_INTERVAL = 1000  # msec between heartbeats sent out
 HEARTBEAT_LIVENESS = 3  # seconds until heartbeat is expected / worker is considered dead
-REQUEST_LIFESPAN = 1  # seconds
 
 PPP_READY = "\x01"  # Signals worker is ready
 PPP_HEARTBEAT = "\x02"  # Signals worker heartbeat
@@ -54,9 +53,9 @@ class Worker(object):
     expiry = None  # expires at this point - unless heartbeat
     service = None  # owning service name if known
 
-    def __init__(self, address):
+    def __init__(self, address, hearbeat_expiration):
         self.address = address
-        self.expiry = time.time() + HEARTBEAT_LIVENESS
+        self.expiry = time.time() + hearbeat_expiration
 
     def __repr__(self):
         return '<Worker - %s>' % self.address
@@ -74,7 +73,9 @@ class EBRouter(object):
 
         self.waiting = []  # direct access to check heartbeat status of Workers
 
-        self.heartbeat_at = time.time() + 1e-3 * HEARTBEAT_INTERVAL
+        self.heartbeat_timeout = HEARTBEAT_LIVENESS
+
+        self.heartbeat_at = time.time() + 1e-3 * self.heartbeat_timeout
 
         self.context = zmq.Context(1)
 
@@ -214,7 +215,7 @@ class EBRouter(object):
 
                 worker = self.workers[worker_uuid]
 
-                worker.expiry = time.time() + HEARTBEAT_LIVENESS
+                worker.expiry = time.time() + self.heartbeat_timeout
 
         elif command == PPP_REPLY:
 
@@ -344,7 +345,7 @@ class EBRouter(object):
         worker = self.workers.get(worker_uuid)
 
         if not worker:  # create new `Worker`
-            worker = Worker(worker_uuid)
+            worker = Worker(worker_uuid, self.heartbeat_timeout)
             self.workers[worker_uuid] = worker
 
             log.info("registering new Worker: %s | %s" % ( worker.address, worker ))
@@ -366,7 +367,7 @@ class EBRouter(object):
             worker.service.updated_at = datetime.datetime.now()
             worker.service.waiting.append(worker)
 
-        worker.expiry = time.time() + HEARTBEAT_LIVENESS
+        worker.expiry = time.time() + self.heartbeat_timeout
 
     def purge_workers(self):
         """ Look for & kill expired workers.
