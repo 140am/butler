@@ -64,7 +64,10 @@ class RPCProxy(object):
             super(RPCProxy, self).__setattr__(attr, value)
 
     def __getattr__(self, attr):
-        return RPCProxyCall(self.client, self.service, attr)
+        if attr == 'close':
+            return self.client.close
+        else:
+            return RPCProxyCall(self.client, self.service, attr)
 
 
 class EBClient(object):
@@ -252,3 +255,9 @@ class EBClient(object):
             gevent.sleep(0.001)
 
         return reply
+
+    def close(self):
+
+        self.client.close()
+        self.poller.unregister(self.client)
+        self.context.term()
