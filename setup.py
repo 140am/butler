@@ -40,6 +40,7 @@ Send a request to a registered Service and receive its response::
 
     client = butler.Client('tcp://127.0.0.1:5555').rpc('api.images')
     client.resize_image('test.jpeg', '150x180')
+    client.close()
 
 """
 

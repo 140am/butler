@@ -71,6 +71,11 @@ worker.register(RPCService())
 worker.run()
 ```
 
+The following methods and attributes are reserved and invoked on the `butler.Service` object directly:
+
+* timeout
+* close
+
 ### Client Request
 
 #### Remote procedure call (RPC) on a Service
@@ -80,6 +85,8 @@ Send a request to a registered service and receive its response.
 ```python
 client = butler.Client('tcp://127.0.0.1:5555').rpc('api.images')
 client.resize_image('test.jpeg', '150x180')
+# ..other calls
+client.close()
 ```
 
 #### Exceptions during RPC
@@ -124,6 +131,7 @@ response = client.call( 'api.images', {
     'uri' : 'test.jpeg',
     'size' : '150x180'
 })
+client.close()
 ```
 
 Process incoming Direct Requests / Messages manually:
