@@ -103,13 +103,13 @@ class EBClient(object):
 
         # close existing socket
         if self.client:
-            self.poller.unregister(self.client)
             self.client.close()
+            self.poller.unregister(self.client)
 
         # create a ZMQ_REQ socket to send requests / receive replies
         self.client = self.context.socket(zmq.DEALER)
         self.client.setsockopt(zmq.HWM, 0)
-        self.client.linger = 1
+        self.client.setsockopt(zmq.LINGER, 1)
         self.client.setsockopt(zmq.IDENTITY, self.uuid)
 
         # register socket with poller
