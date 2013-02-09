@@ -21,6 +21,18 @@ and go at anytime to make adjusting a cluster size dynamically based on workload
 easy_install butler
 ```
 
+### Note
+
+    There is a known issue in gevent ≤ 1.0 or libevent, which can cause zeromq socket events to be missed.
+    butler uses the PyZMQ library which works around this by adding a timeout so it will not wait forever
+    for gevent to notice events. The only known solution for this is to use gevent ≥ 1.0, which is currently
+    at 1.0rc2, and does not exhibit this behavior.
+
+To install the latest gevent 1.0:
+
+    easy_install cython
+    easy_install https://github.com/SiteSupport/gevent/archive/1.0rc2.zip
+
 ## Usage
 
 ### Service Router
