@@ -1,5 +1,6 @@
 # butler 0.3.0 (master)
 * unhandled `RPC` exceptions now return the original traceback details as a string and `traceback_messsage` attribute
+* allow setting the Router <-> Service Worker heartbeat expiration timeout via `Router.heartbeat_timeout`
 * added `close` method to `Client` and `RPC proxy` objects to shutdown a connection
 
 # butler 0.2.0 (November 21, 2012)
