@@ -48,7 +48,7 @@ from setuptools import setup
 
 setup(
     name = 'butler',
-    version = '0.2.0',
+    version = '0.3.0',
     author = 'Manuel Kreutz',
     author_email = 'manuel@140.am',
     description = '0MQ based Service Oriented RPC Framework',
