@@ -91,3 +91,12 @@ the `pickle` module.
 
     * Router Re-Registration Request
     PPP_RECONNECT
+
+
+## Inspiration
+
+- http://rfc.zeromq.org/spec:7
+- http://rfc.zeromq.org/spec:8
+- http://rfc.zeromq.org/spec:9
+- Code Snippets from Min RK <benjaminrk@gmail.com>
+- Java example by Arkadiusz Orzechowski

@@ -53,7 +53,7 @@ setup(
     author_email = 'manuel@140.am',
     description = '0MQ based Service Oriented RPC Framework',
     license = 'MIT',
-    url = 'https://github.com/encodingbooth/butler',
+    url = 'https://github.com/140am/butler',
     packages = ['butler'],
     long_description = __doc__,
     classifiers = [
