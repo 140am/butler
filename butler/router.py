@@ -61,7 +61,7 @@ class Worker(object):
         return '<Worker - %s>' % self.address
 
 
-class EBRouter(object):
+class Router(object):
 
     heart = None
 

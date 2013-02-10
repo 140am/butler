@@ -21,7 +21,7 @@ REQUEST_TIMEOUT = 2500
 log = logging.getLogger(__name__)
 
 
-class EBClient(object):
+class Client(object):
 
     broker = None  # 0MQ address - example: tcp://127.0.0.1:5555
     context = None  # zmq.Context

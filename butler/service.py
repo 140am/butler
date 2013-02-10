@@ -34,7 +34,7 @@ PPP_REPLY = "\x04"  # Signals worker reply
 log = logging.getLogger(__name__)
 
 
-class EBWorker(object):
+class Service(object):
 
     broker = None
     context = None

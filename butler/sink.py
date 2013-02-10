@@ -19,7 +19,7 @@ import zmq.green as zmq
 log = logging.getLogger(__name__)
 
 
-class EBSink(object):
+class Sink(object):
 
     context = None
     poller = None
