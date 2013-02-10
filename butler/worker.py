@@ -16,6 +16,7 @@ import json
 import sys
 import cPickle
 import gevent
+import traceback
 import logging
 import zmq.green as zmq
 
@@ -281,28 +282,47 @@ class EBWorker(object):
             # accepts JSON requests
             rpc_request = json.loads(request)
 
-            # single methods have been registered
-            if rpc_request['method'] in self.rpc_registry:
-                try:
+            try:
+                # single methods have been registered
+                if rpc_request['method'] in self.rpc_registry:
                     reply = self.rpc_registry[rpc_request['method']](
                             *rpc_request['args'],
                             **rpc_request['kwargs']
                         )
-                except:
-                    reply = '500:exception:%s' % cPickle.dumps(
-                        sys.exc_info()[1]
-                    )
 
-            # object has been registered for callbacks
-            elif '.' in self.rpc_registry:
-                try:
+                # object has been registered for callbacks
+                elif '.' in self.rpc_registry:
                     reply = getattr(self.rpc_registry['.'], rpc_request['method'])(
                             *rpc_request['args'],
                             **rpc_request['kwargs']
                         )
-                except:
-                    reply = '500:exception:%s' % cPickle.dumps(
-                        sys.exc_info()[1]
-                    )
-            else:
-                reply = '404'
+
+                # no service available / found
+                else:
+                    reply = '404'
+
+            # return details about unhandled exceptions
+            except:
+                exc_class, exc, tb = sys.exc_info()
+
+                exception_message = str(exc)
+                exception_traceback = traceback.format_exc()
+
+                # extend the original Exception class argument with
+                # information about the traceback as the first argument
+                if not exc.args:
+                    exc.args = ('', )
+
+                exc.args = (
+                    exc.args[0] + \
+                    '\n\nOriginal %s' % exception_traceback,) + \
+                    exc.args[1:]
+
+                reply = '500:exception:%s' % json.dumps({
+                        'class' : cPickle.dumps(exc_class),
+                        'object' : cPickle.dumps(exc),
+                        'name' : exc_class.__name__,
+                        'message' : exception_message,
+                        'traceback' : exception_traceback,
+                        'traceback_list' : traceback.extract_tb(tb)
+                    })

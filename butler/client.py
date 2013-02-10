@@ -9,65 +9,16 @@ import time
 import logging
 import json
 import uuid
-import cPickle
 import butler
 import gevent
 import zmq.green as zmq
+
+from client_rpc_proxy import RPCProxy
 
 REQUEST_RETRIES = 1
 REQUEST_TIMEOUT = 2500
 
 log = logging.getLogger(__name__)
-
-
-class RPCProxyCall:
-
-    def __init__(self, client_obj, service_name, service_attr):
-        self.service = service_name
-        self.service_attr = service_attr
-        self.client = client_obj
-
-    def __call__(self, *args, **kwargs):
-        self.client.retries = 1
-
-        response = self.client.call(
-            self.service, {
-                'method' : self.service_attr,
-                'args' : args,
-                'kwargs' : kwargs
-            }
-        )
-
-        # service returning `404` is considered a non implemented function
-        if response == '404':
-            raise AttributeError('%r object has no attribute %r' % (
-                type(self).__name__, self.service_attr
-            ))
-        elif response and response.startswith('500:exception:'):
-            raise cPickle.loads(response[14:])
-        else:
-            return response
-
-
-class RPCProxy(object):
-
-    def __init__(self, client_obj, service_name):
-        self.service = service_name
-        self.client = client_obj
-        self.client.persistent = False
-
-    def __setattr__(self, attr, value):
-        # handle setting of `Client.timeout`
-        if attr == 'timeout':
-            self.client.timeout = value
-        else:
-            super(RPCProxy, self).__setattr__(attr, value)
-
-    def __getattr__(self, attr):
-        if attr == 'close':
-            return self.client.close
-        else:
-            return RPCProxyCall(self.client, self.service, attr)
 
 
 class EBClient(object):
