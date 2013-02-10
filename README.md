@@ -103,11 +103,16 @@ client.close()
 
 #### Exceptions during RPC
 
+Unhandled exceptions are raised on the client side with the original traceback as a string representation:
+
 ```python
 try:
     client.resize_image()
 except Exception, e:
     # TypeError: resize_image() takes exactly 2 argument (0 given)
+    #
+    # Original Traceback (most recent call last):
+    # ...
 ```
 
 #### Timeouts and Default Behavior
